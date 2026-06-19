@@ -1,0 +1,26 @@
+{
+  "name": "cadastral-fieldbook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Digital cadastral field book for Leica RTK GPS surveys (double-polar workflow)",
+  "scripts": {
+    "dev": "next dev",
+    "dev:standalone": "node scripts/dev-standalone.mjs",
+    "build": "next build",
+    "start": "next start",
+    "seed": "node scripts/seed.mjs"
+  },
+  "dependencies": {
+    "mongoose": "^8.9.5",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "dotenv": "^16.4.7",
+    "mongodb-memory-server": "^11.2.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
+  }
+}
