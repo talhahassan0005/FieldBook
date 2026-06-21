@@ -66,9 +66,9 @@ export default function ReportPage({ params }) {
         </button>
       </div>
 
-      <div className="print-container mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="print-container mx-auto max-w-4xl border border-slate-300 bg-white px-10 py-8 text-[13px] leading-snug text-black">
         {/* Header */}
-        <div className="mb-6 flex items-end justify-between border-b-2 border-slate-800 pb-3">
+        <div className="mb-5 flex items-end justify-between border-b-2 border-black pb-3">
           <div className="flex items-center gap-4">
             {/* Firm logo (white-label) — shown only when a company logo is uploaded */}
             {job.logoUrl && (
@@ -81,7 +81,7 @@ export default function ReportPage({ params }) {
             )}
             <div>
               {job.company && (
-                <div className="text-sm font-bold uppercase tracking-wide text-brand-700">
+                <div className="text-sm font-bold uppercase tracking-wide text-slate-700">
                   {job.company}
                 </div>
               )}
@@ -162,7 +162,7 @@ export default function ReportPage({ params }) {
           {(tx.dE != null || tx.dN != null || tx.rotation || tx.scalePpm != null) && (
             <table className="mt-4 w-full border-collapse text-sm">
               <thead>
-                <tr className="border-y border-slate-300 bg-slate-50 text-left">
+                <tr className="text-left">
                   <Th>No.</Th>
                   <Th>Parameter</Th>
                   <Th right>Value</Th>
@@ -197,7 +197,7 @@ export default function ReportPage({ params }) {
           ) : (
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-y border-slate-300 bg-slate-50 text-left">
+                <tr className="text-left">
                   <Th>System A</Th>
                   <Th>System B</Th>
                   <Th>Point type</Th>
@@ -230,12 +230,10 @@ export default function ReportPage({ params }) {
             </EmptyNote>
           ) : (
             <>
-              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
-                System A — WGS-84 Cartesian
-              </h3>
+              <SubHead>System A — WGS-84 Cartesian</SubHead>
               <table className="mb-4 w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-y border-slate-300 bg-slate-50 text-left">
+                  <tr className="text-left">
                     <Th>Point</Th>
                     <Th right>X [m]</Th>
                     <Th right>Y [m]</Th>
@@ -253,12 +251,10 @@ export default function ReportPage({ params }) {
                   ))}
                 </tbody>
               </table>
-              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
-                System B — Local Grid
-              </h3>
+              <SubHead>System B — Local Grid</SubHead>
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-y border-slate-300 bg-slate-50 text-left">
+                  <tr className="text-left">
                     <Th>Point</Th>
                     <Th right>Easting [m]</Th>
                     <Th right>Northing [m]</Th>
@@ -285,7 +281,7 @@ export default function ReportPage({ params }) {
           <Section title="Reference / Working Points (Local Grid)">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-y border-slate-300 bg-slate-50 text-left">
+                <tr className="text-left">
                   <Th>Point</Th>
                   <Th>Type</Th>
                   <Th right>Easting [m]</Th>
@@ -327,30 +323,30 @@ export default function ReportPage({ params }) {
                     (v) => v != null
                   );
                   return (
-                    <div key={`${p._id}-${i}`} className="rounded-lg border border-slate-200 text-sm">
-                      <div className="flex flex-wrap items-center gap-x-8 gap-y-1 border-b border-slate-200 bg-slate-50 px-3 py-1.5">
-                        <span className="font-semibold text-slate-700">Baseline</span>
+                    <div key={`${p._id}-${i}`} className="border border-slate-300">
+                      <div className="flex flex-wrap items-center gap-x-8 gap-y-1 border-b border-slate-300 bg-[#ededed] px-2 py-1">
+                        <span className="font-bold text-black">Baseline</span>
                         <span>
-                          <span className="text-slate-400">Reference:</span>{" "}
-                          <span className="font-medium text-slate-800">{o.reference || "—"}</span>
+                          <span className="text-slate-600">Reference:</span>{" "}
+                          <span className="font-bold text-black">{o.reference || "—"}</span>
                         </span>
                         <span>
-                          <span className="text-slate-400">Rover:</span>{" "}
-                          <span className="font-medium text-slate-800">{p.name}</span>
+                          <span className="text-slate-600">Rover:</span>{" "}
+                          <span className="font-bold text-black">{p.name}</span>
                         </span>
                         {o.dateTime && (
                           <span>
-                            <span className="text-slate-400">Date/Time:</span> {o.dateTime}
+                            <span className="text-slate-600">Date/Time:</span> {o.dateTime}
                           </span>
                         )}
                       </div>
-                      <div className="px-3 py-2">
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      <div className="px-2 py-1.5">
+                        <div className="mb-1 text-[12px] font-bold text-black">
                           Local Coordinates
                         </div>
                         <table className="w-full border-collapse text-sm">
                           <thead>
-                            <tr className="text-left text-xs text-slate-400">
+                            <tr className="text-left text-[12px] text-slate-600">
                               <th className="py-0.5 font-medium"></th>
                               {hasRef && (
                                 <th className="py-0.5 text-right font-medium">{o.reference}</th>
@@ -377,19 +373,19 @@ export default function ReportPage({ params }) {
                           </tbody>
                         </table>
                         {!hasRef && o.reference && (
-                          <p className="mt-1 text-[11px] text-slate-400">
+                          <p className="mt-1 text-[11px] italic text-slate-500">
                             Reference station “{o.reference}” has no grid coordinates on file — showing rover only.
                           </p>
                         )}
                         {hasQuality && (
                           <>
-                            <div className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                            <div className="mb-1 mt-2 text-[12px] font-bold text-black">
                               Quality
                             </div>
-                            <div className="num text-slate-700">
+                            <div className="num text-black">
                               Sd. E: {fmt(o.sdE, 4)} m &nbsp; Sd. N: {fmt(o.sdN, 4)} m &nbsp; Sd. Hgt: {fmt(o.sdHgt, 4)} m
                             </div>
-                            <div className="num text-slate-700">
+                            <div className="num text-black">
                               Posn. Qlty: {fmt(pq, 4)} m &nbsp; Sd. Slope: {fmt(o.sdSlope, 4)} m
                             </div>
                           </>
@@ -415,32 +411,32 @@ export default function ReportPage({ params }) {
                 // For single-observation points, show "—" for diff columns
                 const isSingle = (c.observationCount || 0) < 2;
                 return (
-                  <div key={p._id} className="rounded-lg border border-slate-200">
-                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
-                      <span className="font-semibold text-slate-800">Point {p.name}</span>
+                  <div key={p._id} className="border border-slate-300">
+                    <div className="flex items-center justify-between border-b border-slate-300 bg-[#ededed] px-2 py-1">
+                      <span className="font-bold text-black">Point {p.name}</span>
                       {p.computed?.limitExceeded ? (
-                        <span className="badge bg-red-100 text-red-700">Limit exceeded</span>
+                        <span className="font-bold text-red-600">Limit exceeded</span>
                       ) : (
-                        <span className="badge bg-emerald-100 text-emerald-700">Within tolerance</span>
+                        <span className="text-black">Within tolerance</span>
                       )}
                     </div>
-                    <div className="px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    <div className="px-2 pt-2 text-[12px] font-bold text-black">
                       Avg. Local Coordinates
                     </div>
-                    <div className="grid gap-3 px-3 pb-3 pt-1 text-sm sm:grid-cols-4">
+                    <div className="grid gap-x-8 px-2 pb-2 pt-1 sm:grid-cols-2 lg:grid-cols-4">
                       <Item label="Easting" value={`${fmt(c.meanEasting, 4)} m`} mono />
                       <Item label="Northing" value={`${fmt(c.meanNorthing, 4)} m`} mono />
                       <Item label="Ortho. Hgt" value={fmt(c.meanHeight, 4)} mono />
                       <Item label="CQ" value={`${fmt(c.cq, 4)} m`} mono />
                     </div>
                     {isSingle ? (
-                      <div className="border-t border-slate-100 px-3 py-2 text-xs text-slate-400">
+                      <div className="border-t border-slate-200 px-2 py-1.5 text-[12px] italic text-slate-500">
                         Single observation — no double-polar check available.
                       </div>
                     ) : (
-                      <table className="w-full border-collapse border-t border-slate-100 text-sm">
+                      <table className="w-full border-collapse border-t border-slate-200 text-sm">
                         <thead>
-                          <tr className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                          <tr className="text-left">
                             <Th>Use</Th>
                             <Th>Limit exceeded</Th>
                             <Th>Reference</Th>
@@ -454,13 +450,13 @@ export default function ReportPage({ params }) {
                           {perObs.map((o, i) => (
                             <tr key={i} className="border-b border-slate-100">
                               <Td>
-                                <span className="text-emerald-600">✓</span>
+                                <span className="text-black">✓</span>
                               </Td>
                               <Td>
                                 {p.computed?.limitExceeded ? (
-                                  <span className="font-semibold text-red-600">Yes</span>
+                                  <span className="font-bold text-red-600">Yes</span>
                                 ) : (
-                                  <span className="text-slate-300">—</span>
+                                  <span className="text-slate-400">—</span>
                                 )}
                               </Td>
                               <Td>{o.reference || "-"}</Td>
@@ -481,17 +477,15 @@ export default function ReportPage({ params }) {
         </Section>
 
         {/* Summary footer */}
-        <div className="mt-8 border-t-2 border-slate-800 pt-3 text-sm">
-          <p className="text-slate-700">
-            <span className="font-semibold">Summary:</span> {points.length} survey point
+        <div className="mt-6 border-t-2 border-black pt-2 text-[13px]">
+          <p className="text-black">
+            <span className="font-bold">Summary:</span> {points.length} survey point
             {points.length === 1 ? "" : "s"}, {control.length} control point
             {control.length === 1 ? "" : "s"}.{" "}
             {exceeded.length === 0 ? (
-              <span className="font-semibold text-emerald-700">
-                All points within tolerance.
-              </span>
+              <span className="font-bold text-black">All points within tolerance.</span>
             ) : (
-              <span className="font-semibold text-red-700">
+              <span className="font-bold text-red-600">
                 {exceeded.length} point{exceeded.length === 1 ? "" : "s"} exceeded the limit:{" "}
                 {exceeded.map((p) => p.name).join(", ")}.
               </span>
@@ -504,11 +498,7 @@ export default function ReportPage({ params }) {
 }
 
 function EmptyNote({ children }) {
-  return (
-    <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
-      {children}
-    </p>
-  );
+  return <p className="px-2 py-1 text-[12px] italic text-slate-500">{children}</p>;
 }
 
 function naturalCmp(a = "", b = "") {
@@ -517,33 +507,39 @@ function naturalCmp(a = "", b = "") {
 
 function Section({ title, children }) {
   return (
-    <section className="mb-6">
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">{title}</h2>
+    <section className="mb-4">
+      <h2 className="mb-2 border border-slate-400 bg-[#d9d9d9] px-2 py-[3px] text-[13px] font-bold text-black">
+        {title}
+      </h2>
       {children}
     </section>
   );
 }
+// Sub-header inside a section (e.g. "2D-Helmert transformation", "System A").
+function SubHead({ children }) {
+  return <h3 className="mb-1 mt-2 text-[12px] font-bold text-black">{children}</h3>;
+}
 function Grid({ children }) {
-  return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>;
+  return <div className="grid grid-cols-1 gap-x-12 sm:grid-cols-2">{children}</div>;
 }
 function Item({ label, value, mono }) {
   return (
-    <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`text-slate-800 ${mono ? "num" : ""}`}>{value || "-"}</div>
+    <div className="flex gap-2 py-[1px] text-[13px]">
+      <span className="w-[48%] shrink-0 text-slate-600">{label}</span>
+      <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
     </div>
   );
 }
 function Th({ children, right }) {
   return (
-    <th className={`px-3 py-2 text-xs font-semibold text-slate-500 ${right ? "text-right" : "text-left"}`}>
+    <th className={`border-y border-slate-500 px-2 py-1 text-[12px] font-bold text-black ${right ? "text-right" : "text-left"}`}>
       {children}
     </th>
   );
 }
 function Td({ children, right, mono }) {
   return (
-    <td className={`px-3 py-1.5 text-slate-700 ${right ? "text-right" : "text-left"} ${mono ? "num" : ""}`}>
+    <td className={`border-b border-slate-200 px-2 py-[3px] text-[12px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""}`}>
       {children}
     </td>
   );
