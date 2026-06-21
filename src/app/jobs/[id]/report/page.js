@@ -16,7 +16,6 @@ export default function ReportPage({ params }) {
   const [generatedAt, setGeneratedAt] = useState("");
 
   useEffect(() => {
-    // Set on client only to avoid SSR hydration mismatch.
     setGeneratedAt(new Date().toLocaleString());
     (async () => {
       try {
@@ -56,9 +55,6 @@ export default function ReportPage({ params }) {
   const residualPoints = sortedControl.filter((c) =>
     [c.resE, c.resN, c.resHgt].some((v) => v != null)
   );
-  // The "Mean Coordinates and Differences" section only lists double-polar points
-  // (2+ observations) — like the original field book.
-  const meanPoints = points.filter((p) => (p.computed?.observationCount || 0) >= 2);
 
   return (
     <div>
@@ -74,9 +70,14 @@ export default function ReportPage({ params }) {
         {/* Header */}
         <div className="mb-6 flex items-end justify-between border-b-2 border-slate-800 pb-3">
           <div className="flex items-center gap-4">
+            {/* Firm logo (white-label) — shown only when a company logo is uploaded */}
             {job.logoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={job.logoUrl} alt="logo" loading="lazy" className="h-14 w-auto" />
+              <img
+                src={job.logoUrl}
+                alt={job.company ? `${job.company} logo` : "Company logo"}
+                className="h-14 w-auto max-w-[160px] object-contain"
+              />
             )}
             <div>
               {job.company && (
@@ -86,14 +87,23 @@ export default function ReportPage({ params }) {
               )}
               <h1 className="text-2xl font-bold text-slate-900">Fieldbook Report</h1>
               <p className="text-sm text-slate-500">
-                Generated {generatedAt} · Double-polar cadastral survey
+                Generated {generatedAt}
               </p>
             </div>
           </div>
-          <div className="text-right text-xs text-slate-500">
-            <div className="font-semibold text-slate-700">{job.name}</div>
-            {job.coordinateSystemName && <div>{job.coordinateSystemName}</div>}
-            {job.projection && <div>{job.projection}</div>}
+          <div className="flex flex-col items-end gap-2 text-right text-xs text-slate-500">
+            {/* Leica Geosystems branding (right side, matches the original field book) */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/leica-logo.svg"
+              alt="Leica Geosystems — when it has to be right"
+              className="h-10 w-auto"
+            />
+            <div>
+              <div className="font-semibold text-slate-700">{job.name}</div>
+              {job.coordinateSystemName && <div>{job.coordinateSystemName}</div>}
+              {job.projection && <div>{job.projection}</div>}
+            </div>
           </div>
         </div>
 
@@ -112,8 +122,8 @@ export default function ReportPage({ params }) {
             <Item label="Application software" value={job.applicationSoftware} />
             <Item label="Firmware version" value={job.firmwareVersion} />
             <Item label="Codelist name" value={job.codelistName} />
-            <Item label="Average limit (Position)" value={`${fmt(job.positionLimit)} m`} mono />
-            <Item label="Average limit (Height)" value={`${fmt(job.heightLimit)} m`} mono />
+            <Item label="Average limit (Position)" value={`${fmt(job.positionLimit, 4)} m`} mono />
+            <Item label="Average limit (Height)" value={`${fmt(job.heightLimit, 4)} m`} mono />
           </Grid>
         </Section>
 
@@ -159,10 +169,10 @@ export default function ReportPage({ params }) {
                 </tr>
               </thead>
               <tbody>
-                <TransformRow n={1} p="dE" v={tx.dE != null ? `${tx.dE} m` : "-"} />
-                <TransformRow n={2} p="dN" v={tx.dN != null ? `${tx.dN} m` : "-"} />
+                <TransformRow n={1} p="dE" v={tx.dE != null ? `${fmtVal(tx.dE)} m` : "-"} />
+                <TransformRow n={2} p="dN" v={tx.dN != null ? `${fmtVal(tx.dN)} m` : "-"} />
                 <TransformRow n={3} p="Rotation" v={tx.rotation || "-"} />
-                <TransformRow n={4} p="Scale" v={tx.scalePpm != null ? `${tx.scalePpm} ppm` : "-"} />
+                <TransformRow n={4} p="Scale" v={tx.scalePpm != null ? `${fmtVal(tx.scalePpm)} ppm` : "-"} />
               </tbody>
             </table>
           )}
@@ -172,7 +182,7 @@ export default function ReportPage({ params }) {
         <Section title="Height Transformation">
           <Grid>
             <Item label="Number of common points" value={hx.commonPoints != null ? String(hx.commonPoints) : "0"} />
-            <Item label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy)} m` : "0.0000 m"} mono />
+            <Item label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
             <Item label="Inclination of height in X" value={hx.inclinationX} />
             <Item label="Inclination of height in Y" value={hx.inclinationY} />
           </Grid>
@@ -182,8 +192,7 @@ export default function ReportPage({ params }) {
         <Section title="Residuals (Grid)">
           {residualPoints.length === 0 ? (
             <EmptyNote>
-              No calibration residuals. Add residual dE/dN to your control points (Control points →
-              Calibration details) to populate this.
+              No calibration residuals. Add residual dE/dN to your control points to populate this.
             </EmptyNote>
           ) : (
             <table className="w-full border-collapse text-sm">
@@ -203,9 +212,9 @@ export default function ReportPage({ params }) {
                     <Td>{c.name}</Td>
                     <Td>{c.name}</Td>
                     <Td>{c.pointType || "Position"}</Td>
-                    <Td right mono>{fmt(c.resE)}</Td>
-                    <Td right mono>{fmt(c.resN)}</Td>
-                    <Td right mono>{fmt(c.resHgt)}</Td>
+                    <Td right mono>{fmt(c.resE, 4)}</Td>
+                    <Td right mono>{fmt(c.resN, 4)}</Td>
+                    <Td right mono>{fmt(c.resHgt, 4)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -217,8 +226,7 @@ export default function ReportPage({ params }) {
         <Section title="List of Identical Points">
           {identicalPoints.length === 0 ? (
             <EmptyNote>
-              No identical points. Add control points with WGS-84 Cartesian coordinates (Control
-              points → Calibration details) to populate System A / System B.
+              No identical points. Add control points with WGS-84 Cartesian coordinates to populate System A / System B.
             </EmptyNote>
           ) : (
             <>
@@ -238,9 +246,9 @@ export default function ReportPage({ params }) {
                   {identicalPoints.map((c) => (
                     <tr key={c._id} className="border-b border-slate-100">
                       <Td>{c.name}</Td>
-                      <Td right mono>{fmt(c.wgs84X)}</Td>
-                      <Td right mono>{fmt(c.wgs84Y)}</Td>
-                      <Td right mono>{fmt(c.wgs84Z)}</Td>
+                      <Td right mono>{fmt(c.wgs84X, 4)}</Td>
+                      <Td right mono>{fmt(c.wgs84Y, 4)}</Td>
+                      <Td right mono>{fmt(c.wgs84Z, 4)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -261,9 +269,9 @@ export default function ReportPage({ params }) {
                   {identicalPoints.map((c) => (
                     <tr key={c._id} className="border-b border-slate-100">
                       <Td>{c.name}</Td>
-                      <Td right mono>{fmt(c.easting)}</Td>
-                      <Td right mono>{fmt(c.northing)}</Td>
-                      <Td right mono>{fmt(c.height)}</Td>
+                      <Td right mono>{fmt(c.easting, 4)}</Td>
+                      <Td right mono>{fmt(c.northing, 4)}</Td>
+                      <Td right mono>{fmt(c.height, 4)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -290,9 +298,9 @@ export default function ReportPage({ params }) {
                   <tr key={c._id} className="border-b border-slate-100">
                     <Td>{c.name}</Td>
                     <Td>{c.pointType || "Position"}</Td>
-                    <Td right mono>{fmt(c.easting)}</Td>
-                    <Td right mono>{fmt(c.northing)}</Td>
-                    <Td right mono>{fmt(c.height)}</Td>
+                    <Td right mono>{fmt(c.easting, 4)}</Td>
+                    <Td right mono>{fmt(c.northing, 4)}</Td>
+                    <Td right mono>{fmt(c.height, 4)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -300,8 +308,7 @@ export default function ReportPage({ params }) {
           </Section>
         )}
 
-        {/* GPS Coordinates / baselines — block layout exactly as the field book:
-            Reference station coords AND rover coords side by side, plus quality. */}
+        {/* GPS Coordinates / baselines — block layout exactly as the field book */}
         <Section title="GPS Coordinates">
           {points.length === 0 ? (
             <EmptyNote>No survey points recorded.</EmptyNote>
@@ -309,14 +316,23 @@ export default function ReportPage({ params }) {
             <div className="space-y-3">
               {points.flatMap((p) =>
                 (p.observations || []).map((o, i) => {
-                  const ref = controlByName[o.reference] || {};
+                  const ref = controlByName[o.reference];
+                  // Only show the reference column when we actually have its grid
+                  // coordinates on file — otherwise we'd print a column of dashes.
+                  const hasRef = !!ref && (ref.easting != null || ref.northing != null);
+                  const pq = positionQuality(o);
+                  // Only show the Quality block when at least one Sd / quality
+                  // value was captured (the field book has it; a plain CSV won't).
+                  const hasQuality = [o.sdE, o.sdN, o.sdHgt, o.sdSlope, pq].some(
+                    (v) => v != null
+                  );
                   return (
                     <div key={`${p._id}-${i}`} className="rounded-lg border border-slate-200 text-sm">
                       <div className="flex flex-wrap items-center gap-x-8 gap-y-1 border-b border-slate-200 bg-slate-50 px-3 py-1.5">
                         <span className="font-semibold text-slate-700">Baseline</span>
                         <span>
                           <span className="text-slate-400">Reference:</span>{" "}
-                          <span className="font-medium text-slate-800">{o.reference || "-"}</span>
+                          <span className="font-medium text-slate-800">{o.reference || "—"}</span>
                         </span>
                         <span>
                           <span className="text-slate-400">Rover:</span>{" "}
@@ -330,43 +346,54 @@ export default function ReportPage({ params }) {
                       </div>
                       <div className="px-3 py-2">
                         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                          Local coordinates
+                          Local Coordinates
                         </div>
                         <table className="w-full border-collapse text-sm">
                           <thead>
                             <tr className="text-left text-xs text-slate-400">
                               <th className="py-0.5 font-medium"></th>
-                              <th className="py-0.5 text-right font-medium">{o.reference || "Reference"}</th>
+                              {hasRef && (
+                                <th className="py-0.5 text-right font-medium">{o.reference}</th>
+                              )}
                               <th className="py-0.5 text-right font-medium">{p.name} (Rover)</th>
                             </tr>
                           </thead>
                           <tbody>
                             <tr>
                               <Td>Easting</Td>
-                              <Td right mono>{fmt(ref.easting)} m</Td>
-                              <Td right mono>{fmt(o.easting)} m</Td>
+                              {hasRef && <Td right mono>{fmt(ref.easting, 4)} m</Td>}
+                              <Td right mono>{fmt(o.easting, 4)} m</Td>
                             </tr>
                             <tr>
                               <Td>Northing</Td>
-                              <Td right mono>{fmt(ref.northing)} m</Td>
-                              <Td right mono>{fmt(o.northing)} m</Td>
+                              {hasRef && <Td right mono>{fmt(ref.northing, 4)} m</Td>}
+                              <Td right mono>{fmt(o.northing, 4)} m</Td>
                             </tr>
                             <tr>
                               <Td>Ellip. Hgt</Td>
-                              <Td right mono>{fmt(ref.height)}</Td>
-                              <Td right mono>{fmt(o.height)}</Td>
+                              {hasRef && <Td right mono>{fmt(ref.height, 4)}</Td>}
+                              <Td right mono>{fmt(o.height, 4)}</Td>
                             </tr>
                           </tbody>
                         </table>
-                        <div className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                          Quality
-                        </div>
-                        <div className="num text-slate-700">
-                          Sd. E: {fmt(o.sdE)} m &nbsp; Sd. N: {fmt(o.sdN)} m &nbsp; Sd. Hgt: {fmt(o.sdHgt)} m
-                        </div>
-                        <div className="num text-slate-700">
-                          Posn. Qlty: {fmt(positionQuality(o))} m &nbsp; Sd. Slope: {fmt(o.sdSlope)} m
-                        </div>
+                        {!hasRef && o.reference && (
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            Reference station “{o.reference}” has no grid coordinates on file — showing rover only.
+                          </p>
+                        )}
+                        {hasQuality && (
+                          <>
+                            <div className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                              Quality
+                            </div>
+                            <div className="num text-slate-700">
+                              Sd. E: {fmt(o.sdE, 4)} m &nbsp; Sd. N: {fmt(o.sdN, 4)} m &nbsp; Sd. Hgt: {fmt(o.sdHgt, 4)} m
+                            </div>
+                            <div className="num text-slate-700">
+                              Posn. Qlty: {fmt(pq, 4)} m &nbsp; Sd. Slope: {fmt(o.sdSlope, 4)} m
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -376,67 +403,79 @@ export default function ReportPage({ params }) {
           )}
         </Section>
 
-        {/* Mean coordinates and differences (double-polar points only) */}
+        {/* Mean coordinates and differences — ALL points, including single-obs */}
         <Section title="Mean Coordinates and Differences">
-          {meanPoints.length === 0 ? (
-            <EmptyNote>No double-polar points recorded.</EmptyNote>
+          {points.length === 0 ? (
+            <EmptyNote>No survey points recorded.</EmptyNote>
           ) : (
             <div className="space-y-5">
-              {meanPoints.map((p) => (
-                <div key={p._id} className="rounded-lg border border-slate-200">
-                  <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
-                    <span className="font-semibold text-slate-800">Point {p.name}</span>
-                    {p.computed?.limitExceeded ? (
-                      <span className="badge bg-red-100 text-red-700">Limit exceeded</span>
+              {points.map((p) => {
+                const c = p.computed || {};
+                const perObs = c.perObservation || [];
+                // For single-observation points, show "—" for diff columns
+                const isSingle = (c.observationCount || 0) < 2;
+                return (
+                  <div key={p._id} className="rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="font-semibold text-slate-800">Point {p.name}</span>
+                      {p.computed?.limitExceeded ? (
+                        <span className="badge bg-red-100 text-red-700">Limit exceeded</span>
+                      ) : (
+                        <span className="badge bg-emerald-100 text-emerald-700">Within tolerance</span>
+                      )}
+                    </div>
+                    <div className="px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Avg. Local Coordinates
+                    </div>
+                    <div className="grid gap-3 px-3 pb-3 pt-1 text-sm sm:grid-cols-4">
+                      <Item label="Easting" value={`${fmt(c.meanEasting, 4)} m`} mono />
+                      <Item label="Northing" value={`${fmt(c.meanNorthing, 4)} m`} mono />
+                      <Item label="Ortho. Hgt" value={fmt(c.meanHeight, 4)} mono />
+                      <Item label="CQ" value={`${fmt(c.cq, 4)} m`} mono />
+                    </div>
+                    {isSingle ? (
+                      <div className="border-t border-slate-100 px-3 py-2 text-xs text-slate-400">
+                        Single observation — no double-polar check available.
+                      </div>
                     ) : (
-                      <span className="badge bg-emerald-100 text-emerald-700">Within tolerance</span>
+                      <table className="w-full border-collapse border-t border-slate-100 text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                            <Th>Use</Th>
+                            <Th>Limit exceeded</Th>
+                            <Th>Reference</Th>
+                            <Th>Date / Time</Th>
+                            <Th right>Posn. diff [m]</Th>
+                            <Th right>Hgt. diff [m]</Th>
+                            <Th right>Posn. + Hgt. diff [m]</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {perObs.map((o, i) => (
+                            <tr key={i} className="border-b border-slate-100">
+                              <Td>
+                                <span className="text-emerald-600">✓</span>
+                              </Td>
+                              <Td>
+                                {p.computed?.limitExceeded ? (
+                                  <span className="font-semibold text-red-600">Yes</span>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </Td>
+                              <Td>{o.reference || "-"}</Td>
+                              <Td>{o.dateTime || "-"}</Td>
+                              <Td right mono>{fmt(o.deviationPosn, 4)}</Td>
+                              <Td right mono>{fmt(o.deviationHgt, 4)}</Td>
+                              <Td right mono>{fmt(o.deviationCombined, 4)}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     )}
                   </div>
-                  <div className="px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Avg. Local Coordinates
-                  </div>
-                  <div className="grid gap-3 px-3 pb-3 pt-1 text-sm sm:grid-cols-4">
-                    <Item label="Easting" value={`${fmt(p.computed?.meanEasting)} m`} mono />
-                    <Item label="Northing" value={`${fmt(p.computed?.meanNorthing)} m`} mono />
-                    <Item label="Ortho. Hgt" value={fmt(p.computed?.meanHeight)} mono />
-                    <Item label="CQ" value={`${fmt(p.computed?.cq)} m`} mono />
-                  </div>
-                  <table className="w-full border-collapse border-t border-slate-100 text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                        <Th>Use</Th>
-                        <Th>Limit exceeded</Th>
-                        <Th>Reference</Th>
-                        <Th>Date / Time</Th>
-                        <Th right>Posn. diff [m]</Th>
-                        <Th right>Hgt. diff [m]</Th>
-                        <Th right>Posn. + Hgt. diff [m]</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(p.computed?.perObservation || []).map((o, i) => (
-                        <tr key={i} className="border-b border-slate-100">
-                          <Td>
-                            <span className="text-emerald-600">✓</span>
-                          </Td>
-                          <Td>
-                            {p.computed?.limitExceeded ? (
-                              <span className="font-semibold text-red-600">Yes</span>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                          </Td>
-                          <Td>{o.reference || "-"}</Td>
-                          <Td>{o.dateTime || "-"}</Td>
-                          <Td right mono>{fmt(o.deviationPosn)}</Td>
-                          <Td right mono>{fmt(o.deviationHgt)}</Td>
-                          <Td right mono>{fmt(o.deviationCombined)}</Td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Section>
@@ -472,7 +511,6 @@ function EmptyNote({ children }) {
   );
 }
 
-// Natural sort so MTRM4 comes before MTRM13 (not after, as plain string sort).
 function naturalCmp(a = "", b = "") {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
@@ -518,4 +556,10 @@ function TransformRow({ n, p, v }) {
       <Td right mono>{v}</Td>
     </tr>
   );
+}
+
+// Format value with explicit decimal places, showing negative sign always
+function fmtVal(v, dp = 4) {
+  if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return "-";
+  return Number(v).toFixed(dp);
 }

@@ -85,6 +85,30 @@ export function parsePastedRows(text, columns) {
   return { rows, errors };
 }
 
+// Reference / control marks are recognised either by their point name
+// (WP1, BRM19, MTRM4, …) or by a feature code that denotes a beacon / benchmark
+// (IPC12, …). Everything else is treated as a measured survey point.
+export const CONTROL_NAME_RE = /^(wp|brm|mtrm|trm|stn|bm|tbm)\s*\d/i;
+export const CONTROL_CODE_RE = /(ipc|brm|trm|beacon|benchmark|control|trig|tbm)/i;
+
+/**
+ * Decide whether a parsed CSV row is a control/reference point or a survey point.
+ * Used by the importer to auto-split a mixed coordinate list (the client's CSV
+ * lists both the working point + reference marks AND the plot corners together).
+ *
+ * @returns {"control" | "survey"}
+ */
+export function classifyPointKind(
+  row,
+  { nameRe = CONTROL_NAME_RE, codeRe = CONTROL_CODE_RE } = {}
+) {
+  const name = String(row?.name || "").trim();
+  const code = String(row?.code || "").trim();
+  if (name && nameRe.test(name)) return "control";
+  if (code && codeRe.test(code)) return "control";
+  return "survey";
+}
+
 /**
  * Pair first-polar and second-polar rows by point name into survey-point inputs.
  *

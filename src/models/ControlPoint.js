@@ -11,6 +11,7 @@ const ControlPointSchema = new Schema(
   {
     job: { type: Schema.Types.ObjectId, ref: "Job", required: true, index: true },
     name: { type: String, required: true, trim: true },
+    code: { type: String, default: "" }, // feature code from the field CSV (e.g. IPC12)
     pointType: { type: String, default: "Position" }, // Position / Height / Control
 
     // Local grid coordinates (used as the baseline reference).
