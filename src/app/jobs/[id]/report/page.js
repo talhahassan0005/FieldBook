@@ -56,8 +56,8 @@ export default function ReportPage({ params }) {
     [c.resE, c.resN, c.resHgt].some((v) => v != null)
   );
 
-  const reportDate =
-    job.jobCreated && /\d/.test(job.jobCreated) ? job.jobCreated : generatedAt;
+  // The date under the title is the report generation time (as in the Leica book).
+  const reportDate = generatedAt;
 
   return (
     <div>
@@ -95,7 +95,7 @@ export default function ReportPage({ params }) {
           <Row label="Job name" value={job.name} />
           <Row
             label="Created"
-            value={job.jobCreated || (job.createdAt ? new Date(job.createdAt).toLocaleString() : "")}
+            value={fmtDateMaybe(job.jobCreated) || (job.createdAt ? new Date(job.createdAt).toLocaleString() : "")}
           />
           <Row label="Description" value={job.description} />
           <Row label="Creator" value={job.creator} />
@@ -521,4 +521,15 @@ function TransformRow({ n, p, v }) {
 function fmtVal(v, dp = 4) {
   if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return "-";
   return Number(v).toFixed(dp);
+}
+
+// If a value is an ISO timestamp, show it as a clean local date-time; else as-is.
+function fmtDateMaybe(v) {
+  if (!v) return "";
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString();
+  }
+  return s;
 }

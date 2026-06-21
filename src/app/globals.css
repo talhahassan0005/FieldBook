@@ -58,6 +58,26 @@ body {
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 
+/* Force background colours (the grey section bands) to render on screen AND when
+   printing — browsers strip backgrounds from print by default, which made the
+   Leica-style section bands disappear in the PDF. */
+.print-container,
+.print-container * {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Match the Leica field book typography: Arial throughout, including coordinate
+   numbers (proportional Arial with tabular figures so columns still align —
+   NOT a monospace font). */
+.print-container {
+  font-family: Arial, Helvetica, sans-serif;
+}
+.print-container .num {
+  font-family: Arial, Helvetica, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Print: show only the report, in clean black & white */
 @media print {
   .no-print {
@@ -73,6 +93,8 @@ body {
     padding: 0 !important;
     max-width: none !important;
   }
+  /* Per-page margins on every page. (The browser's running header/footer is a
+     print-dialog option — "Headers and footers" — not controllable via CSS.) */
   @page {
     margin: 14mm;
   }
