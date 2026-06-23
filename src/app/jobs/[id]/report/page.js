@@ -51,10 +51,24 @@ export default function ReportPage({ params }) {
   const controlByName = Object.fromEntries(control.map((c) => [c.name, c]));
   const isIdentical = (c) => [c.wgs84X, c.wgs84Y, c.wgs84Z].some((v) => v != null);
   const identicalPoints = sortedControl.filter(isIdentical);
-  const referencePoints = sortedControl.filter((c) => !isIdentical(c));
   const residualPoints = sortedControl.filter((c) =>
     [c.resE, c.resN, c.resHgt].some((v) => v != null)
   );
+  // "Mean Coordinates and Differences" lists only the double-polar points
+  // (2+ observations) — exactly as the Leica field book does.
+  const meanPoints = points.filter((p) => (p.computed?.observationCount || 0) >= 2);
+
+  // GPS Coordinates baselines, grouped by reference station (as Leica does:
+  // all rovers from base 1, then all rovers from base 2…), rovers by name.
+  const baselines = points.flatMap((p) => (p.observations || []).map((o) => ({ p, o })));
+  const refOrder = [];
+  for (const b of baselines) {
+    if (!refOrder.includes(b.o.reference)) refOrder.push(b.o.reference);
+  }
+  baselines.sort((a, b) => {
+    const d = refOrder.indexOf(a.o.reference) - refOrder.indexOf(b.o.reference);
+    return d !== 0 ? d : naturalCmp(a.p.name, b.p.name);
+  });
 
   // The date under the title is the report generation time (as in the Leica book).
   const reportDate = generatedAt;
@@ -161,6 +175,7 @@ export default function ReportPage({ params }) {
         <Fields>
           <Row label="Number of common points" value={hx.commonPoints != null ? String(hx.commonPoints) : "0"} />
           <Row label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
+          <Row label="Parameters" value={hx.parameters || "-"} mono />
           <Row label="Inclination of height in X" value={hx.inclinationX || "-"} />
           <Row label="Inclination of height in Y" value={hx.inclinationY || "-"} />
         </Fields>
@@ -177,9 +192,9 @@ export default function ReportPage({ params }) {
                 <Th>System A</Th>
                 <Th>System B</Th>
                 <Th>Point type</Th>
-                <Th right>dE [m]</Th>
-                <Th right>dN [m]</Th>
-                <Th right>dHgt [m]</Th>
+                <Th>dE [m]</Th>
+                <Th>dN [m]</Th>
+                <Th>dHgt [m]</Th>
               </tr>
             </thead>
             <tbody>
@@ -188,9 +203,9 @@ export default function ReportPage({ params }) {
                   <Td>{c.name}</Td>
                   <Td>{c.name}</Td>
                   <Td>{c.pointType || "Position"}</Td>
-                  <Td right mono>{fmt(c.resE, 4)}</Td>
-                  <Td right mono>{fmt(c.resN, 4)}</Td>
-                  <Td right mono>{fmt(c.resHgt, 4)}</Td>
+                  <Td mono>{c.resE != null ? `${fmt(c.resE, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resN != null ? `${fmt(c.resN, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resHgt != null ? `${fmt(c.resHgt, 4)} m` : "-"}</Td>
                 </tr>
               ))}
             </tbody>
@@ -250,44 +265,13 @@ export default function ReportPage({ params }) {
           </>
         )}
 
-        {/* Reference / working points (extra: control points without WGS-84) */}
-        {referencePoints.length > 0 && (
-          <>
-            <Plain>Reference / Working Points</Plain>
-            <Plain sub>Local Grid:</Plain>
-            <table className="border-collapse">
-              <thead>
-                <tr>
-                  <Th w="6rem">Point</Th>
-                  <Th>Type</Th>
-                  <Th right>Easting [m]</Th>
-                  <Th right>Northing [m]</Th>
-                  <Th right>Hgt [m]</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {referencePoints.map((c) => (
-                  <tr key={c._id}>
-                    <Td>{c.name}</Td>
-                    <Td>{c.pointType || "Position"}</Td>
-                    <Td right mono>{fmt(c.easting, 4)}</Td>
-                    <Td right mono>{fmt(c.northing, 4)}</Td>
-                    <Td right mono>{fmt(c.height, 4)}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-
         {/* GPS Coordinates */}
         <Band>GPS Coordinates</Band>
-        {points.length === 0 ? (
+        {baselines.length === 0 ? (
           <EmptyNote>No survey points recorded.</EmptyNote>
         ) : (
           <div className="space-y-4">
-            {points.flatMap((p) =>
-              (p.observations || []).map((o, i) => {
+            {baselines.map(({ p, o }, i) => {
                 const ref = controlByName[o.reference];
                 const hasRef = !!ref && (ref.easting != null || ref.northing != null);
                 const pq = positionQuality(o);
@@ -317,9 +301,6 @@ export default function ReportPage({ params }) {
                         a={hasRef ? fmt(ref.height, 4) : null}
                         b={fmt(o.height, 4)}
                       />
-                      {o.dateTime && (
-                        <CoordLine label="Date / Time" a={null} b={o.dateTime} />
-                      )}
                     </div>
                     {hasQuality && (
                       <div className="grid grid-cols-[5rem_1fr] pt-1 text-[12px]">
@@ -341,8 +322,7 @@ export default function ReportPage({ params }) {
                     )}
                   </div>
                 );
-              })
-            )}
+            })}
           </div>
         )}
 
@@ -350,11 +330,11 @@ export default function ReportPage({ params }) {
         <div className="mt-4">
           <Band>Mean Coordinates and Differences</Band>
         </div>
-        {points.length === 0 ? (
-          <EmptyNote>No survey points recorded.</EmptyNote>
+        {meanPoints.length === 0 ? (
+          <EmptyNote>No double-polar points to report.</EmptyNote>
         ) : (
           <div className="space-y-4">
-            {points.map((p) => {
+            {meanPoints.map((p) => {
               const c = p.computed || {};
               const perObs = c.perObservation || [];
               const isSingle = (c.observationCount || 0) < 2;

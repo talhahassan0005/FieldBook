@@ -42,6 +42,13 @@ export async function POST(request, { params }) {
         easting: p.easting ?? null,
         northing: p.northing ?? null,
         height: p.height ?? null,
+        // Calibration data (populates Residuals + List of identical points).
+        wgs84X: p.wgs84X ?? null,
+        wgs84Y: p.wgs84Y ?? null,
+        wgs84Z: p.wgs84Z ?? null,
+        resE: p.resE ?? null,
+        resN: p.resN ?? null,
+        resHgt: p.resHgt ?? null,
       };
 
       if (existingNames.has(name)) {

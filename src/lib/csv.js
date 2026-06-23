@@ -45,7 +45,12 @@ export function parsePastedRows(text, columns) {
     .filter((l) => l.trim() !== "");
 
   const delim = detectDelimiter(lines[0]);
-  const numericCols = new Set(["easting", "northing", "height", "sdE", "sdN", "sdHgt"]);
+  const numericCols = new Set([
+    "easting", "northing", "height",
+    "sdE", "sdN", "sdHgt",
+    // Calibration columns for control / identical points.
+    "wgs84X", "wgs84Y", "wgs84Z", "resE", "resN", "resHgt",
+  ]);
 
   lines.forEach((line, idx) => {
     const cells = splitLine(line, delim);

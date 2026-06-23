@@ -33,7 +33,7 @@ const EMPTY = {
   firmwareVersion: "",
   codelistName: "",
   transformation: { commonPoints: "", rotationOriginX: "", rotationOriginY: "", dE: "", dN: "", rotation: "", scalePpm: "" },
-  heightTransformation: { commonPoints: "", meanAccuracy: "", inclinationX: "", inclinationY: "" },
+  heightTransformation: { commonPoints: "", meanAccuracy: "", parameters: "", inclinationX: "", inclinationY: "" },
 };
 
 export default function JobForm({ initial, jobId }) {
@@ -95,6 +95,7 @@ export default function JobForm({ initial, jobId }) {
         heightTransformation: {
           commonPoints: numOrNull(form.heightTransformation.commonPoints) ?? 0,
           meanAccuracy: numOrNull(form.heightTransformation.meanAccuracy),
+          parameters: form.heightTransformation.parameters,
           inclinationX: form.heightTransformation.inclinationX,
           inclinationY: form.heightTransformation.inclinationY,
         },
@@ -139,6 +140,18 @@ export default function JobForm({ initial, jobId }) {
           </Field>
           <Field label="Description" full>
             <input className="input" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="CAD / cadastral survey" />
+          </Field>
+          <Field label="Time zone">
+            <input className="input" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} placeholder="2h 00'" />
+          </Field>
+          <Field label="Application software">
+            <input className="input" value={form.applicationSoftware} onChange={(e) => set("applicationSoftware", e.target.value)} placeholder="LEICA Geo Office 7.0" />
+          </Field>
+          <Field label="Firmware version">
+            <input className="input" value={form.firmwareVersion} onChange={(e) => set("firmwareVersion", e.target.value)} placeholder="5.60" />
+          </Field>
+          <Field label="Codelist name">
+            <input className="input" value={form.codelistName} onChange={(e) => set("codelistName", e.target.value)} placeholder="THEBE" />
           </Field>
           <div className="sm:col-span-2">
             <label className="label">Company logo (shown on the report)</label>
@@ -243,27 +256,26 @@ export default function JobForm({ initial, jobId }) {
           </Field>
         </div>
 
-        {form.includeHeight && (
-          <>
-            <h3 className="mb-2 mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">
-              Height transformation
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-4">
-              <Field label="Number of common points">
-                <input className="input num" value={form.heightTransformation.commonPoints} onChange={(e) => setHeightTransform("commonPoints", e.target.value)} placeholder="0" />
-              </Field>
-              <Field label="Mean accuracy (m)">
-                <input className="input num" value={form.heightTransformation.meanAccuracy} onChange={(e) => setHeightTransform("meanAccuracy", e.target.value)} placeholder="0.0000" />
-              </Field>
-              <Field label="Inclination X">
-                <input className="input num" value={form.heightTransformation.inclinationX} onChange={(e) => setHeightTransform("inclinationX", e.target.value)} placeholder="0° 00' 00.00000&quot;" />
-              </Field>
-              <Field label="Inclination Y">
-                <input className="input num" value={form.heightTransformation.inclinationY} onChange={(e) => setHeightTransform("inclinationY", e.target.value)} placeholder="0° 00' 00.00000&quot;" />
-              </Field>
-            </div>
-          </>
-        )}
+        <h3 className="mb-2 mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">
+          Height transformation
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-4">
+          <Field label="Number of common points">
+            <input className="input num" value={form.heightTransformation.commonPoints} onChange={(e) => setHeightTransform("commonPoints", e.target.value)} placeholder="0" />
+          </Field>
+          <Field label="Mean accuracy (m)">
+            <input className="input num" value={form.heightTransformation.meanAccuracy} onChange={(e) => setHeightTransform("meanAccuracy", e.target.value)} placeholder="0.0000" />
+          </Field>
+          <Field label="Inclination X">
+            <input className="input num" value={form.heightTransformation.inclinationX} onChange={(e) => setHeightTransform("inclinationX", e.target.value)} placeholder="0° 00' 00.00000&quot;" />
+          </Field>
+          <Field label="Inclination Y">
+            <input className="input num" value={form.heightTransformation.inclinationY} onChange={(e) => setHeightTransform("inclinationY", e.target.value)} placeholder="0° 00' 00.00000&quot;" />
+          </Field>
+          <Field label="Parameters" full>
+            <input className="input num" value={form.heightTransformation.parameters} onChange={(e) => setHeightTransform("parameters", e.target.value)} placeholder="0.00000000  0.00000000  0.0000 m" />
+          </Field>
+        </div>
       </section>
 
       <section className="card p-5">
@@ -291,26 +303,6 @@ export default function JobForm({ initial, jobId }) {
               <input type="number" step="0.0001" className="input num" value={form.heightLimit} onChange={(e) => set("heightLimit", e.target.value)} />
             </Field>
           )}
-        </div>
-      </section>
-
-      <section className="card p-5">
-        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">
-          Equipment metadata (optional)
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Application software">
-            <input className="input" value={form.applicationSoftware} onChange={(e) => set("applicationSoftware", e.target.value)} placeholder="LEICA Geo Office 7.0" />
-          </Field>
-          <Field label="Firmware version">
-            <input className="input" value={form.firmwareVersion} onChange={(e) => set("firmwareVersion", e.target.value)} placeholder="5.60" />
-          </Field>
-          <Field label="Codelist name">
-            <input className="input" value={form.codelistName} onChange={(e) => set("codelistName", e.target.value)} placeholder="THEBE" />
-          </Field>
-          <Field label="Time zone">
-            <input className="input" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} placeholder="2h 00'" />
-          </Field>
         </div>
       </section>
 

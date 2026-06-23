@@ -43,6 +43,7 @@ const JobSchema = new Schema(
     heightTransformation: {
       commonPoints: { type: Number, default: 0 },
       meanAccuracy: { type: Number, default: null },
+      parameters: { type: String, default: "" }, // e.g. "0.00000000  0.00000000  0.0000 m"
       inclinationX: { type: String, default: "" },
       inclinationY: { type: String, default: "" },
     },

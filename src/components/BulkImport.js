@@ -61,6 +61,13 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
             easting: first.easting,
             northing: first.northing,
             height: first.height ?? null,
+            // Calibration columns (WGS-84 Cartesian + grid residuals), if present.
+            wgs84X: first.wgs84X ?? null,
+            wgs84Y: first.wgs84Y ?? null,
+            wgs84Z: first.wgs84Z ?? null,
+            resE: first.resE ?? null,
+            resN: first.resN ?? null,
+            resHgt: first.resHgt ?? null,
           });
           continue;
         }
@@ -203,7 +210,7 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
         <label className="label">Column order (matches your CSV columns)</label>
         <input className="input num" value={columnSpec} onChange={(e) => setColumnSpec(e.target.value)} />
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-          <span>Tokens: name, code, easting, northing, height, sdE, sdN, sdHgt, reference, ignore.</span>
+          <span>Tokens: name, code, easting, northing, height, sdE, sdN, sdHgt, reference, wgs84X, wgs84Y, wgs84Z, resE, resN, resHgt, ignore.</span>
           {COLUMN_PRESETS.map((p) => (
             <button
               key={p}
