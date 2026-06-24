@@ -102,6 +102,31 @@ export default function JobForm({ initial, jobId }) {
     );
     if (match) applyCoordSystem(match);
   }
+  // Job "Created" (when the machine was set up on site). Auto-default the
+  // coordinate-system "Created" to ~1h15m later, same date (client's request),
+  // unless the user already set it or a saved system supplied it.
+  function setJobCreated(v) {
+    setForm((f) => {
+      const next = { ...f, jobCreated: v };
+      if (!f.coordinateSystemCreated) {
+        const d = parseDateTime(v);
+        if (d) {
+          d.setMinutes(d.getMinutes() + 75);
+          next.coordinateSystemCreated = fmtDateTime(d);
+        }
+      }
+      return next;
+    });
+  }
+  // When a SAVED coordinate system is selected, its calibration is fixed — lock
+  // the transformation fields (only projection stays editable). A new/unknown
+  // name leaves them editable so the system can be defined once.
+  const isSavedSystem =
+    !!form.coordinateSystemName.trim() &&
+    coordSystems.some(
+      (s) => (s.coordinateSystemName || "").trim().toLowerCase() === form.coordinateSystemName.trim().toLowerCase()
+    );
+
   function setTransform(field, value) {
     setForm((f) => ({ ...f, transformation: { ...f.transformation, [field]: value } }));
   }
@@ -184,7 +209,7 @@ export default function JobForm({ initial, jobId }) {
             <input className="input" value={form.creator} onChange={(e) => set("creator", e.target.value)} placeholder="BISM" />
           </Field>
           <Field label="Job created (date/time)">
-            <input className="input" value={form.jobCreated} onChange={(e) => set("jobCreated", e.target.value)} placeholder="10/06/2022 07:54:48" />
+            <input className="input" value={form.jobCreated} onChange={(e) => setJobCreated(e.target.value)} placeholder="10/06/2022 07:54:48" />
           </Field>
           <Field label="Company / firm (report header)">
             <input className="input" value={form.company} onChange={(e) => set("company", e.target.value)} placeholder="Your survey firm" />
@@ -291,6 +316,12 @@ export default function JobForm({ initial, jobId }) {
           </Field>
         </div>
 
+        {isSavedSystem && (
+          <p className="mt-4 text-[11px] italic text-slate-500">
+            Calibration is locked — it comes from the saved “{form.coordinateSystemName}” coordinate system (only Projection stays editable). Type a new name above to define a new system.
+          </p>
+        )}
+        <fieldset disabled={isSavedSystem} className="contents">
         <h3 className="mb-2 mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">
           2D-Helmert transformation
         </h3>
@@ -340,6 +371,7 @@ export default function JobForm({ initial, jobId }) {
             <input className="input num" value={form.heightTransformation.parameters} onChange={(e) => setHeightTransform("parameters", e.target.value)} placeholder="0.00000000  0.00000000  0.0000 m" />
           </Field>
         </div>
+        </fieldset>
       </section>
 
       <section className="card p-5">
@@ -402,4 +434,22 @@ function numOrNull(v) {
   if (v === "" || v === null || v === undefined) return null;
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : null;
+}
+
+// Parse "DD/MM/YYYY[ HH:MM[:SS]]" (or anything Date understands) → Date, else null.
+function parseDateTime(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    const [, dd, mm, yyyy, h = "0", mi = "0", se = "0"] = m;
+    const d = new Date(+yyyy, +mm - 1, +dd, +h, +mi, +se);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function fmtDateTime(d) {
+  const p = (x) => String(x).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }

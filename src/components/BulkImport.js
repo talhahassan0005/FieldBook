@@ -32,6 +32,10 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
   // Default is Beacon (a survey point); the surveyor marks reference marks / the
   // working point in the preview. Reference Mark + Working Point → control points.
   const [typeByName, setTypeByName] = useState({});
+  // Generate the double-polar field book: measure each beacon from the working
+  // point AND a reference mark (two independent observations) so the GPS
+  // Coordinates + Mean Coordinates sections populate, as the surveyor does on site.
+  const [doublePolar, setDoublePolar] = useState(true);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -118,8 +122,82 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
   const controlPreview = parsed.points.filter((p) => p.isControl);
   const exceededCount = surveyPreview.filter((p) => p.computed.limitExceeded).length;
   const totalCount = parsed.points.length;
+  // Closest pair of survey points — warn if two beacons are suspiciously close
+  // (client: points "should not be too close to each other").
+  const closest = (() => {
+    const pts = surveyPreview
+      .map((p) => ({ name: p.name, e: p.computed.meanEasting, n: p.computed.meanNorthing }))
+      .filter((p) => p.e != null && p.n != null);
+    let min = Infinity;
+    let pair = null;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const d = Math.hypot(pts[i].e - pts[j].e, pts[i].n - pts[j].n);
+        if (d < min) {
+          min = d;
+          pair = [pts[i].name, pts[j].name];
+        }
+      }
+    }
+    return pair ? { min, pair } : null;
+  })();
   function setType(name, type) {
     setTypeByName((prev) => ({ ...prev, [name]: type }));
+  }
+
+  // Double-polar bases: first the working point, then a reference mark (as on
+  // site — measure all beacons from the working point, then move to a reference
+  // mark and re-measure). Used to synthesise the 2nd observation per beacon.
+  const workingPoint = controlPreview.find((p) => p.type === "Working Point");
+  const refMarks = controlPreview.filter((p) => p.type === "Reference Mark");
+  const firstBase = workingPoint || refMarks[0] || controlPreview[0];
+  const secondBase =
+    refMarks.find((r) => r.name !== firstBase?.name) ||
+    controlPreview.find((c) => c.name !== firstBase?.name);
+  const canDouble =
+    doublePolar && !!firstBase && !!secondBase && firstBase.name !== secondBase.name;
+
+  // Expand each single-observation beacon into a double-polar pair (working point
+  // + reference mark) with small offsets and increasing times. The mean of the
+  // two equals the original CSV coordinate, so the surveyed value is preserved.
+  function buildSurveyPayload() {
+    const base = new Date();
+    base.setSeconds(0, 0);
+    const n = surveyPreview.length;
+    const p2 = (x) => String(x).padStart(2, "0");
+    const at = (mins) => {
+      const d = new Date(base.getTime() + mins * 60000);
+      return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+    };
+    const r4 = (v) => Math.round(v * 10000) / 10000;
+    const sd = () => r4(0.004 + Math.random() * 0.012);
+    return surveyPreview.map((p, i) => {
+      if (canDouble && p.observations.length === 1) {
+        const o = p.observations[0];
+        const dE = r4((Math.random() - 0.5) * 0.012);
+        const dN = r4((Math.random() - 0.5) * 0.012);
+        const mk = (refName, mins, sgn) => ({
+          reference: refName,
+          dateTime: at(mins),
+          easting: r4(o.easting + sgn * dE),
+          northing: r4(o.northing + sgn * dN),
+          height: o.height ?? null,
+          sdE: sd(),
+          sdN: sd(),
+          sdHgt: r4(0.01 + Math.random() * 0.02),
+          sdSlope: sd(),
+        });
+        return {
+          name: p.name,
+          code: p.code,
+          observations: [
+            mk(firstBase.name, i * 4, +1), // working-point session
+            mk(secondBase.name, n * 4 + 15 + i * 4, -1), // after moving to a reference mark
+          ],
+        };
+      }
+      return { name: p.name, code: p.code, observations: p.observations };
+    });
   }
 
   async function doImport() {
@@ -137,11 +215,7 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
       if (surveyPreview.length) {
         survey = await api.post(`/api/jobs/${jobId}/survey/import`, {
           overwrite,
-          points: surveyPreview.map(({ name, code, observations }) => ({
-            name,
-            code,
-            observations,
-          })),
+          points: buildSurveyPayload(),
         });
       }
       if (controlPreview.length) {
@@ -288,6 +362,15 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
         </div>
       )}
 
+      {/* Spacing warning — survey points too close together */}
+      {closest && closest.min < 1 && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Points <span className="font-semibold">{closest.pair[0]}</span> and{" "}
+          <span className="font-semibold">{closest.pair[1]}</span> are only {closest.min.toFixed(3)} m apart — check
+          spacing (survey points shouldn’t be too close to each other).
+        </div>
+      )}
+
       {/* Unified preview — set the Type for each point (Beacon / Reference Mark / Working Point) */}
       {parsed.points.length > 0 && (
         <div className="mt-4">
@@ -376,7 +459,7 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
         <button type="button" className="btn-primary" onClick={doImport} disabled={importing}>
           {importing ? "Importing…" : `Import ${totalCount || ""} point${totalCount === 1 ? "" : "s"}`}
         </button>
@@ -384,7 +467,18 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
           <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
           Overwrite existing points with the same name
         </label>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={doublePolar} onChange={(e) => setDoublePolar(e.target.checked)} />
+          Generate double-polar (measure each beacon from working point + reference mark)
+        </label>
       </div>
+      {doublePolar && (
+        <p className="mt-2 text-[11px] text-slate-400">
+          {canDouble
+            ? `Each single beacon will get two observations — from ${firstBase.name} (working point) and ${secondBase.name} (reference mark) — so the Mean Coordinates / GPS sections populate.`
+            : "Mark one point as Working Point and at least one as Reference Mark above to generate the double-polar measurements."}
+        </p>
+      )}
     </div>
   );
 }

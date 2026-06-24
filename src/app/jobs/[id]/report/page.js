@@ -57,7 +57,6 @@ export default function ReportPage({ params }) {
   const sortedControl = [...control].sort((a, b) => naturalCmp(a.name, b.name));
   const controlByName = Object.fromEntries(control.map((c) => [c.name, c]));
   const isIdentical = (c) => [c.wgs84X, c.wgs84Y, c.wgs84Z].some((v) => v != null);
-  const identicalPoints = sortedControl.filter(isIdentical);
   const residualPoints = sortedControl.filter((c) =>
     [c.resE, c.resN, c.resHgt].some((v) => v != null)
   );
@@ -246,34 +245,40 @@ export default function ReportPage({ params }) {
           </table>
         )}
 
-        {/* List of identical points (plain heading) */}
+        {/* List of identical points = the reference marks used for calibration.
+            System A (WGS-84) only shows when those coords are on file; System B
+            (Local Grid) always shows from the reference marks' grid coordinates. */}
         <Plain>List of identical points</Plain>
-        {identicalPoints.length === 0 ? (
-          <EmptyNote>No identical points recorded.</EmptyNote>
+        {calibrationPoints.length === 0 ? (
+          <EmptyNote>No reference marks. Mark points as “Reference Mark” when importing the CSV.</EmptyNote>
         ) : (
           <>
-            <Plain sub>System A:</Plain>
-            <Plain sub>WGS 84 Cartesian:</Plain>
-            <table className="mb-2 border-collapse">
-              <thead>
-                <tr>
-                  <Th w="6rem">Point</Th>
-                  <Th right>X [m]</Th>
-                  <Th right>Y [m]</Th>
-                  <Th right>Z [m]</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {identicalPoints.map((c) => (
-                  <tr key={c._id}>
-                    <Td>{c.name}</Td>
-                    <Td right mono>{fmt(c.wgs84X, 4)}</Td>
-                    <Td right mono>{fmt(c.wgs84Y, 4)}</Td>
-                    <Td right mono>{fmt(c.wgs84Z, 4)}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {calibrationPoints.some(isIdentical) && (
+              <>
+                <Plain sub>System A:</Plain>
+                <Plain sub>WGS 84 Cartesian:</Plain>
+                <table className="mb-2 border-collapse">
+                  <thead>
+                    <tr>
+                      <Th w="6rem">Point</Th>
+                      <Th right>X [m]</Th>
+                      <Th right>Y [m]</Th>
+                      <Th right>Z [m]</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calibrationPoints.map((c) => (
+                      <tr key={c._id}>
+                        <Td>{c.name}</Td>
+                        <Td right mono>{fmt(c.wgs84X, 4)}</Td>
+                        <Td right mono>{fmt(c.wgs84Y, 4)}</Td>
+                        <Td right mono>{fmt(c.wgs84Z, 4)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
             <Plain sub>System B:</Plain>
             <Plain sub>Local Grid:</Plain>
             <table className="border-collapse">
@@ -286,7 +291,7 @@ export default function ReportPage({ params }) {
                 </tr>
               </thead>
               <tbody>
-                {identicalPoints.map((c) => (
+                {calibrationPoints.map((c) => (
                   <tr key={c._id}>
                     <Td>{c.name}</Td>
                     <Td right mono>{fmt(c.easting, 4)}</Td>
