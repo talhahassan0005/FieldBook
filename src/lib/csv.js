@@ -28,6 +28,13 @@ function toNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Count digits after the decimal point in a raw numeric string (0 if none/no decimal). */
+function decimalDigits(raw) {
+  const s = String(raw ?? "").trim();
+  const m = s.match(/\.(\d+)/);
+  return m ? m[1].length : 0;
+}
+
 /**
  * @param {string} text       - pasted block
  * @param {string[]} columns  - column spec, e.g. ["name","easting","northing","height","sdE","sdN","sdHgt","code"]
@@ -84,6 +91,19 @@ export function parsePastedRows(text, columns) {
       errors.push(`Line ${idx + 1} (${rec.name}): missing/invalid Easting or Northing — skipped`);
       return;
     }
+
+    // Coordinates must carry at least 4 decimal digits (survey-grade precision).
+    // Don't reject the row — just flag it so the surveyor can double-check the source file.
+    const eCol = columns.indexOf("easting");
+    const nCol = columns.indexOf("northing");
+    const eDp = eCol >= 0 ? decimalDigits(cells[eCol]) : 4;
+    const nDp = nCol >= 0 ? decimalDigits(cells[nCol]) : 4;
+    if (eDp < 4 || nDp < 4) {
+      errors.push(
+        `Line ${idx + 1} (${rec.name}): Easting/Northing has fewer than 4 decimal digits — check this row for rounded/low-precision coordinates.`
+      );
+    }
+
     rows.push(rec);
   });
 

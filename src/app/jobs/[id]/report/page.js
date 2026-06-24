@@ -63,16 +63,48 @@ export default function ReportPage({ params }) {
   // (2+ observations) — exactly as the Leica field book does.
   const meanPoints = points.filter((p) => (p.computed?.observationCount || 0) >= 2);
 
+  // The reference marks were themselves surveyed from the working point during
+  // calibration — they must appear as Baseline entries too, BEFORE the beacons,
+  // but only once (the "first polar" round; they aren't re-surveyed on the
+  // second polar). Synthesised from the control points' own stored coordinates,
+  // since a reference mark only ever has a single fixed position (no
+  // double-polar pairing of its own).
+  const workingPoint = sortedControl.find((c) => c.pointType === "Working Point");
+  const refMarkBaselines = calibrationPoints
+    .filter((rm) => rm.easting != null && rm.northing != null)
+    .map((rm) => ({
+      p: { _id: `refmark-${rm._id}`, name: rm.name },
+      o: {
+        reference: workingPoint?.name || job.coordinateSystemName || "WP",
+        dateTime: "",
+        easting: rm.easting,
+        northing: rm.northing,
+        height: rm.height,
+        sdE: null,
+        sdN: null,
+        sdHgt: null,
+        sdSlope: null,
+      },
+      isReferenceMark: true,
+    }));
+
   // GPS Coordinates baselines, grouped by reference station (as Leica does:
   // all rovers from base 1, then all rovers from base 2…), rovers by name.
-  const baselines = points.flatMap((p) => (p.observations || []).map((o) => ({ p, o })));
+  const baselines = [
+    ...refMarkBaselines,
+    ...points.flatMap((p) => (p.observations || []).map((o) => ({ p, o }))),
+  ];
   const refOrder = [];
   for (const b of baselines) {
     if (!refOrder.includes(b.o.reference)) refOrder.push(b.o.reference);
   }
   baselines.sort((a, b) => {
     const d = refOrder.indexOf(a.o.reference) - refOrder.indexOf(b.o.reference);
-    return d !== 0 ? d : naturalCmp(a.p.name, b.p.name);
+    if (d !== 0) return d;
+    // Within the same reference group, reference marks always come first
+    // (surveyed before the beacons), regardless of name.
+    if (!!a.isReferenceMark !== !!b.isReferenceMark) return a.isReferenceMark ? -1 : 1;
+    return naturalCmp(a.p.name, b.p.name);
   });
 
   // The date under the title is the report generation time (as in the Leica book).
@@ -82,7 +114,7 @@ export default function ReportPage({ params }) {
     <div>
       {/* Toolbar (hidden on print) */}
       <div className="no-print mb-4 flex items-center justify-between">
-        <BackButton href={`/jobs/${id}`} label="Back to job" />
+        <BackButton label="Back" />
         <button className="btn-primary" onClick={() => window.print()}>
           🖨 Print / Save as PDF
         </button>
@@ -191,7 +223,7 @@ export default function ReportPage({ params }) {
         {/* Height transformation (sub-band) */}
         <Band sub>Height transformation</Band>
         <Fields>
-          <Row label="Number of common points" value={hx.commonPoints != null ? String(hx.commonPoints) : "0"} />
+          <Row label="Number of common points" value={String(calibrationPoints.length || hx.commonPoints || 0)} />
           <Row label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
           <Row label="Parameters" value={hx.parameters || "-"} mono />
           <Row label="Inclination of height in X" value={hx.inclinationX || "-"} />
@@ -304,9 +336,9 @@ export default function ReportPage({ params }) {
                   <div key={`${p._id}-${i}`}>
                     {/* Baseline band */}
                     <div className="grid grid-cols-3 gap-2 bg-[#d9d9d9] px-1.5 py-[3px] text-[12px] font-bold text-black">
-                      <span>Baseline</span>
-                      <span>Reference: {o.reference || "—"}</span>
-                      <span>Rover: {p.name}</span>
+                      <span className="whitespace-nowrap">Baseline</span>
+                      <span className="whitespace-nowrap">Reference: {o.reference || "—"}</span>
+                      <span className="whitespace-nowrap">Rover: {p.name}</span>
                     </div>
                     <div className="border-b border-slate-300 pt-1">
                       <div className="font-bold">Local Coordinates:</div>
@@ -329,12 +361,15 @@ export default function ReportPage({ params }) {
                     {hasQuality && (
                       <div className="grid grid-cols-[5rem_1fr] pt-1 text-[12px]">
                         <span className="font-bold">Quality:</span>
-                        <div className="num">
-                          <div>
-                            Sd. E: {fmt(o.sdE, 4)} m &nbsp;&nbsp; Sd. N: {fmt(o.sdN, 4)} m &nbsp;&nbsp; Sd. Hgt: {fmt(o.sdHgt, 4)} m
+                        <div className="num flex flex-col gap-0.5">
+                          <div className="flex flex-wrap gap-x-4 whitespace-nowrap">
+                            <span>Sd. E: {fmt(o.sdE, 4)} m</span>
+                            <span>Sd. N: {fmt(o.sdN, 4)} m</span>
+                            <span>Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
                           </div>
-                          <div>
-                            Posn. Qlty: {fmt(pq, 4)} m &nbsp;&nbsp; Sd. Slope: {fmt(o.sdSlope, 4)} m
+                          <div className="flex flex-wrap gap-x-4 whitespace-nowrap">
+                            <span>Posn. Qlty: {fmt(pq, 4)} m</span>
+                            <span>Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
                           </div>
                         </div>
                       </div>
