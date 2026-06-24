@@ -147,18 +147,6 @@ export default function JobForm({ initial, jobId }) {
     setForm((f) => ({ ...f, heightTransformation: { ...f.heightTransformation, [field]: value } }));
   }
 
-  function onLogoFile(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 500 * 1024) {
-      setError("Logo image is too large (max 500 KB). Please use a smaller image.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => set("logoUrl", reader.result);
-    reader.readAsDataURL(file);
-  }
-
   async function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -224,38 +212,9 @@ export default function JobForm({ initial, jobId }) {
           <Field label="Job created (date/time)">
             <input className="input" value={form.jobCreated} onChange={(e) => setJobCreated(e.target.value)} placeholder="10/06/2022 07:54:48" />
           </Field>
-          <Field label="Company / firm (report header)">
-            <input className="input" value={form.company} onChange={(e) => set("company", e.target.value)} placeholder="Your survey firm" />
-          </Field>
           <Field label="Description" full>
             <input className="input" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="CAD / cadastral survey" />
           </Field>
-          <Field label="Time zone">
-            <input className="input" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} placeholder="2h 00'" />
-          </Field>
-          <Field label="Application software">
-            <input className="input" value={form.applicationSoftware} onChange={(e) => set("applicationSoftware", e.target.value)} placeholder="LEICA Geo Office 7.0" />
-          </Field>
-          <Field label="Firmware version">
-            <input className="input" value={form.firmwareVersion} onChange={(e) => set("firmwareVersion", e.target.value)} placeholder="5.60" />
-          </Field>
-          <div className="sm:col-span-2">
-            <label className="label">Company logo (shown on the report) — optional</label>
-            <div className="flex items-center gap-3">
-              {form.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.logoUrl} alt="logo" loading="lazy" className="h-12 w-auto rounded border border-slate-200 bg-white p-1" />
-              ) : (
-                <span className="text-xs text-slate-400">No logo</span>
-              )}
-              <input type="file" accept="image/*" onChange={onLogoFile} className="text-sm" />
-              {form.logoUrl && (
-                <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => set("logoUrl", "")}>
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       </section>
 
@@ -286,12 +245,9 @@ export default function JobForm({ initial, jobId }) {
               </p>
             )}
           </Field>
-          <Field label="Transformation name (auto)">
-            <input className="input bg-slate-50 text-slate-500" value={form.transformationName} readOnly tabIndex={-1} placeholder="(same as coordinate system name)" />
-          </Field>
-          <Field label="Transformation type (default)">
-            <input className="input bg-slate-50 text-slate-500" value={form.transformationType || "Twostep"} readOnly tabIndex={-1} />
-          </Field>
+          {/* Transformation name (auto) and type (default) are background values — not shown in the UI */}
+          <input type="hidden" value={form.transformationName} readOnly />
+          <input type="hidden" value={form.transformationType || "Twostep"} readOnly />
           <Field label="Pre-transformation name">
             <input className="input" value={form.preTransformationName} onChange={(e) => set("preTransformationName", e.target.value)} placeholder="DSM_BNGR_To_BTRS" />
           </Field>

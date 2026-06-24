@@ -99,21 +99,21 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
       const first = parsePastedRows(firstText, columns);
       const second = parsePastedRows(secondText, columns);
       const paired = pairPolars(first.rows, second.rows, firstRef || "Polar 1", secondRef || "Polar 2");
-      const points = paired.map((p) => {
-        const type = typeByName[p.name] ?? "Beacon";
-        return {
-          name: p.name,
-          type,
-          isControl: type === "Reference Mark" || type === "Working Point",
-          code: p.code || "",
-          easting: p.observations[0]?.easting ?? null,
-          northing: p.observations[0]?.northing ?? null,
-          height: p.observations[0]?.height ?? null,
-          wgs84X: null, wgs84Y: null, wgs84Z: null, resE: null, resN: null, resHgt: null,
-          observations: p.observations,
-          computed: computeSurveyPoint(p.observations, limits || {}),
-        };
-      });
+      // In double-polar (2 files) mode, ALL paired points are survey beacons —
+      // the two CSVs are two independent polar observations of the same beacons.
+      // Never treat them as control/reference marks.
+      const points = paired.map((p) => ({
+        name: p.name,
+        type: "Beacon",
+        isControl: false,
+        code: p.code || "",
+        easting: p.observations[0]?.easting ?? null,
+        northing: p.observations[0]?.northing ?? null,
+        height: p.observations[0]?.height ?? null,
+        wgs84X: null, wgs84Y: null, wgs84Z: null, resE: null, resN: null, resHgt: null,
+        observations: p.observations,
+        computed: computeSurveyPoint(p.observations, limits || {}),
+      }));
       return { points, errors: [...first.errors, ...second.errors] };
     }
   }, [mode, singleText, singleRef, firstText, secondText, columns, firstRef, secondRef, limits, typeByName]);
@@ -157,9 +157,9 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
   const canDouble =
     doublePolar && !!firstBase && !!secondBase && firstBase.name !== secondBase.name;
 
-  // Expand each single-observation beacon into a double-polar pair (working point
-  // + reference mark) with small offsets and increasing times. The mean of the
-  // two equals the original CSV coordinate, so the surveyed value is preserved.
+  // Expand each single-observation beacon into a double-polar pair.
+  // The mean of the two observations equals the original CSV coordinate exactly.
+  // Reference names come from the Working Point / Reference Mark if set, else "Polar 1" / "Polar 2".
   function buildSurveyPayload() {
     const base = new Date();
     base.setSeconds(0, 0);
@@ -171,8 +171,10 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
     };
     const r4 = (v) => Math.round(v * 10000) / 10000;
     const sd = () => r4(0.004 + Math.random() * 0.012);
+    const ref1 = canDouble ? firstBase.name : (firstRef || "Polar 1");
+    const ref2 = canDouble ? secondBase.name : (secondRef || "Polar 2");
     return surveyPreview.map((p, i) => {
-      if (canDouble && p.observations.length === 1) {
+      if (p.observations.length === 1) {
         const o = p.observations[0];
         const dE = r4((Math.random() - 0.5) * 0.012);
         const dN = r4((Math.random() - 0.5) * 0.012);
@@ -191,8 +193,8 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
           name: p.name,
           code: p.code,
           observations: [
-            mk(firstBase.name, i * 4, +1), // working-point session
-            mk(secondBase.name, n * 4 + 15 + i * 4, -1), // after moving to a reference mark
+            mk(ref1, i * 4, +1),
+            mk(ref2, n * 4 + 15 + i * 4, -1),
           ],
         };
       }
@@ -378,8 +380,9 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
             <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
               Points — {parsed.points.length}{" "}
               <span className="font-normal normal-case text-slate-400">
-                ({surveyPreview.length} beacon{surveyPreview.length === 1 ? "" : "s"} → survey,{" "}
-                {controlPreview.length} reference mark / working point → control)
+                {mode === "polar"
+                  ? `(${parsed.points.length} survey beacon${parsed.points.length === 1 ? "" : "s"} with 2 polar observations each)`
+                  : `(${surveyPreview.length} beacon${surveyPreview.length === 1 ? "" : "s"} → survey, ${controlPreview.length} reference mark / working point → control)`}
               </span>
             </h3>
             {exceededCount > 0 && (
@@ -393,10 +396,10 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
               <thead className="sticky top-0 bg-slate-50">
                 <tr className="text-left text-xs uppercase text-slate-400">
                   <th className="px-3 py-2 font-semibold">Point</th>
-                  <th className="px-3 py-2 font-semibold">Type</th>
+                  {mode === "single" && <th className="px-3 py-2 font-semibold">Type</th>}
                   <th className="px-3 py-2 text-center font-semibold">Obs</th>
-                  <th className="px-3 py-2 text-right font-semibold">Easting</th>
-                  <th className="px-3 py-2 text-right font-semibold">Northing</th>
+                  <th className="px-3 py-2 text-right font-semibold">Mean Easting</th>
+                  <th className="px-3 py-2 text-right font-semibold">Mean Northing</th>
                   <th className="px-3 py-2 font-semibold">Status</th>
                 </tr>
               </thead>
@@ -404,18 +407,24 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
                 {parsed.points.map((p) => (
                   <tr key={p.name} className="border-t border-slate-100">
                     <td className="px-3 py-1.5 font-medium text-slate-800">{p.name}</td>
-                    <td className="px-3 py-1.5">
-                      <select
-                        className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs"
-                        value={p.type}
-                        onChange={(e) => setType(p.name, e.target.value)}
-                      >
-                        <option value="Beacon">Beacon (survey)</option>
-                        <option value="Reference Mark">Reference Mark</option>
-                        <option value="Working Point">Working Point</option>
-                      </select>
+                    {mode === "single" && (
+                      <td className="px-3 py-1.5">
+                        <select
+                          className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs"
+                          value={p.type}
+                          onChange={(e) => setType(p.name, e.target.value)}
+                        >
+                          <option value="Beacon">Beacon (survey)</option>
+                          <option value="Reference Mark">Reference Mark</option>
+                          <option value="Working Point">Working Point</option>
+                        </select>
+                      </td>
+                    )}
+                    <td className="px-3 py-1.5 text-center text-slate-600">
+                      {mode === "single" && doublePolar && p.computed.observationCount === 1 && !p.isControl
+                        ? <span title="Two polar observations will be auto-generated on import">2 <span className="text-slate-400">(auto)</span></span>
+                        : p.computed.observationCount}
                     </td>
-                    <td className="px-3 py-1.5 text-center text-slate-600">{p.computed.observationCount}</td>
                     <td className="num px-3 py-1.5 text-right text-slate-600">
                       {fmt(p.isControl ? p.easting : p.computed.meanEasting)}
                     </td>
@@ -467,16 +476,18 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
           <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
           Overwrite existing points with the same name
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={doublePolar} onChange={(e) => setDoublePolar(e.target.checked)} />
-          Generate double-polar (measure each beacon from working point + reference mark)
-        </label>
+        {mode === "single" && (
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={doublePolar} onChange={(e) => setDoublePolar(e.target.checked)} />
+            Generate double-polar (measure each beacon from working point + reference mark)
+          </label>
+        )}
       </div>
-      {doublePolar && (
+      {mode === "single" && doublePolar && (
         <p className="mt-2 text-[11px] text-slate-400">
           {canDouble
-            ? `Each single beacon will get two observations — from ${firstBase.name} (working point) and ${secondBase.name} (reference mark) — so the Mean Coordinates / GPS sections populate.`
-            : "Mark one point as Working Point and at least one as Reference Mark above to generate the double-polar measurements."}
+            ? `Each beacon will get two polar observations — from ${firstBase.name} and ${secondBase.name} — with their mean equal to the CSV coordinate.`
+            : `Each beacon will automatically get two polar observations (Polar 1 + Polar 2) with their mean equal to the CSV coordinate. Mark a Working Point and Reference Mark above to use custom reference names.`}
         </p>
       )}
     </div>
