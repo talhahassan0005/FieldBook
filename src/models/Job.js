@@ -28,6 +28,20 @@ const JobSchema = new Schema(
     geoidModel: { type: String, default: "" },
     cscsModel: { type: String, default: "" },
 
+    // 3D-Helmert transformation block (Bursa-Wolf; usually all-zero — no height
+    // in the calibration). Shown above the 2D-Helmert block in the field book.
+    transformation3D: {
+      commonPoints: { type: Number, default: 0 },
+      model: { type: String, default: "Bursa-Wolf" },
+      shiftDX: { type: Number, default: 0 },
+      shiftDY: { type: Number, default: 0 },
+      shiftDZ: { type: Number, default: 0 },
+      rotX: { type: String, default: "0.00000\"" },
+      rotY: { type: String, default: "0.00000\"" },
+      rotZ: { type: String, default: "0.00000\"" },
+      scalePpm: { type: Number, default: 0 },
+    },
+
     // 2D-Helmert transformation parameters (informational, from calibration).
     transformation: {
       commonPoints: { type: Number, default: null },

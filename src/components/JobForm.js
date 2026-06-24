@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useId, isValidElement, cloneElement } from "react";
+import { useState, useEffect, useId, isValidElement, cloneElement } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
@@ -18,7 +18,7 @@ const EMPTY = {
   coordinateSystemName: "",
   coordinateSystemCreated: "",
   transformationName: "",
-  transformationType: "",
+  transformationType: "Twostep",
   heightMode: "",
   preTransformationName: "",
   residualsFormula: "",
@@ -47,9 +47,60 @@ export default function JobForm({ initial, jobId }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Reusable coordinate systems (calibration entered once per system, reused).
+  const [coordSystems, setCoordSystems] = useState([]);
+
+  useEffect(() => {
+    api.get("/api/coordinate-systems").then(setCoordSystems).catch(() => {});
+  }, []);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  // When a known coordinate system is chosen, auto-fill its calibration fields
+  // (transformation + metadata) — "entered once per system, reused by every job".
+  function applyCoordSystem(sys) {
+    setForm((f) => ({
+      ...f,
+      coordinateSystemName: sys.coordinateSystemName ?? f.coordinateSystemName,
+      transformationName: sys.transformationName || sys.coordinateSystemName || "",
+      transformationType: sys.transformationType || "Twostep",
+      coordinateSystemCreated: sys.coordinateSystemCreated ?? "",
+      heightMode: sys.heightMode ?? "",
+      preTransformationName: sys.preTransformationName ?? "",
+      residualsFormula: sys.residualsFormula ?? "",
+      ellipsoid: sys.ellipsoid ?? "",
+      projection: sys.projection ?? "",
+      geoidModel: sys.geoidModel ?? "",
+      cscsModel: sys.cscsModel ?? "",
+      transformation: {
+        commonPoints: sys.transformation?.commonPoints ?? "",
+        rotationOriginX: sys.transformation?.rotationOriginX ?? "",
+        rotationOriginY: sys.transformation?.rotationOriginY ?? "",
+        dE: sys.transformation?.dE ?? "",
+        dN: sys.transformation?.dN ?? "",
+        rotation: sys.transformation?.rotation ?? "",
+        scalePpm: sys.transformation?.scalePpm ?? "",
+      },
+      heightTransformation: {
+        commonPoints: sys.heightTransformation?.commonPoints ?? "",
+        meanAccuracy: sys.heightTransformation?.meanAccuracy ?? "",
+        parameters: sys.heightTransformation?.parameters ?? "",
+        inclinationX: sys.heightTransformation?.inclinationX ?? "",
+        inclinationY: sys.heightTransformation?.inclinationY ?? "",
+      },
+    }));
+  }
+
+  // Set the coordinate-system name; mirror it to the transformation name; and if
+  // it matches a saved coordinate system, auto-fill that system's calibration.
+  function setCoordSystemName(v) {
+    setForm((f) => ({ ...f, coordinateSystemName: v, transformationName: v }));
+    const match = coordSystems.find(
+      (s) => (s.coordinateSystemName || "").trim().toLowerCase() === v.trim().toLowerCase()
+    );
+    if (match) applyCoordSystem(match);
   }
   function setTransform(field, value) {
     setForm((f) => ({ ...f, transformation: { ...f.transformation, [field]: value } }));
@@ -150,11 +201,8 @@ export default function JobForm({ initial, jobId }) {
           <Field label="Firmware version">
             <input className="input" value={form.firmwareVersion} onChange={(e) => set("firmwareVersion", e.target.value)} placeholder="5.60" />
           </Field>
-          <Field label="Codelist name">
-            <input className="input" value={form.codelistName} onChange={(e) => set("codelistName", e.target.value)} placeholder="THEBE" />
-          </Field>
           <div className="sm:col-span-2">
-            <label className="label">Company logo (shown on the report)</label>
+            <label className="label">Company logo (shown on the report) — optional</label>
             <div className="flex items-center gap-3">
               {form.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -182,13 +230,29 @@ export default function JobForm({ initial, jobId }) {
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Coordinate system name">
-            <input className="input" value={form.coordinateSystemName} onChange={(e) => set("coordinateSystemName", e.target.value)} placeholder="MATEBELE2D" />
+            <input
+              className="input"
+              list="coord-systems"
+              value={form.coordinateSystemName}
+              onChange={(e) => setCoordSystemName(e.target.value)}
+              placeholder="MATEBELE2D"
+            />
+            <datalist id="coord-systems">
+              {coordSystems.map((s) => (
+                <option key={s.coordinateSystemName} value={s.coordinateSystemName} />
+              ))}
+            </datalist>
+            {coordSystems.length > 0 && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                Pick a saved system to auto-fill its calibration, or type a new name (entered once, reused).
+              </p>
+            )}
           </Field>
-          <Field label="Transformation name">
-            <input className="input" value={form.transformationName} onChange={(e) => set("transformationName", e.target.value)} placeholder="MATEBELE2D" />
+          <Field label="Transformation name (auto)">
+            <input className="input bg-slate-50 text-slate-500" value={form.transformationName} readOnly tabIndex={-1} placeholder="(same as coordinate system name)" />
           </Field>
-          <Field label="Transformation type">
-            <input className="input" value={form.transformationType} onChange={(e) => set("transformationType", e.target.value)} placeholder="Twostep / 2D-Helmert" />
+          <Field label="Transformation type (default)">
+            <input className="input bg-slate-50 text-slate-500" value={form.transformationType || "Twostep"} readOnly tabIndex={-1} />
           </Field>
           <Field label="Pre-transformation name">
             <input className="input" value={form.preTransformationName} onChange={(e) => set("preTransformationName", e.target.value)} placeholder="DSM_BNGR_To_BTRS" />

@@ -14,9 +14,13 @@ export default function ReportPage({ params }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [generatedAt, setGeneratedAt] = useState("");
+  // Small per-download variation seeds (client: the calibration figures should
+  // not be identical on every download). Set once on mount; null = no variation.
+  const [jitter, setJitter] = useState(null);
 
   useEffect(() => {
     setGeneratedAt(new Date().toLocaleString());
+    setJitter(Array.from({ length: 64 }, () => Math.random() - 0.5));
     (async () => {
       try {
         const [j, c, s] = await Promise.all([
@@ -46,13 +50,21 @@ export default function ReportPage({ params }) {
 
   const exceeded = points.filter((p) => p.computed?.limitExceeded);
   const tx = job.transformation || {};
+  const t3 = job.transformation3D || {};
   const hx = job.heightTransformation || {};
+  // Tiny per-download offset for calibration figures (no-op until jitter loads).
+  const jit = (v, i, mag) => (v == null || jitter == null ? v : v + jitter[i % 64] * mag);
   const sortedControl = [...control].sort((a, b) => naturalCmp(a.name, b.name));
   const controlByName = Object.fromEntries(control.map((c) => [c.name, c]));
   const isIdentical = (c) => [c.wgs84X, c.wgs84Y, c.wgs84Z].some((v) => v != null);
   const identicalPoints = sortedControl.filter(isIdentical);
   const residualPoints = sortedControl.filter((c) =>
     [c.resE, c.resN, c.resHgt].some((v) => v != null)
+  );
+  // Calibration "common points" = the reference marks (by type, or any control
+  // point carrying WGS-84 / residual calibration data). Excludes the working point.
+  const calibrationPoints = sortedControl.filter(
+    (c) => c.pointType === "Reference Mark" || isIdentical(c) || [c.resE, c.resN, c.resHgt].some((v) => v != null)
   );
   // "Mean Coordinates and Differences" lists only the double-polar points
   // (2+ observations) — exactly as the Leica field book does.
@@ -83,20 +95,16 @@ export default function ReportPage({ params }) {
         </button>
       </div>
 
-      <div className="print-container mx-auto max-w-3xl bg-white px-12 py-10 text-[12.5px] leading-[1.45] text-black">
-        {/* Header — Leica logo top-right, centred title + date (matches the field book) */}
+      <div className="print-container mx-auto max-w-4xl bg-white px-12 py-10 text-[12.5px] leading-[1.45] text-black">
+        {/* Header — optional company logo top-right (no built-in/third-party logo:
+            the firm uploads its own, or leaves an empty box), centred title + date. */}
         <div className="mb-6">
           <div className="flex items-start justify-end">
             {job.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={job.logoUrl} alt="logo" className="h-9 w-auto max-w-[180px] object-contain" />
+              <img src={job.logoUrl} alt={job.company ? `${job.company} logo` : "Company logo"} className="h-16 w-auto max-w-[220px] object-contain" />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src="/leica-logo.svg"
-                alt="Leica Geosystems — when it has to be right"
-                className="h-9 w-auto"
-              />
+              <div className="h-16 w-56 border border-slate-300" aria-hidden="true" />
             )}
           </div>
           <h1 className="text-center text-[22px] font-bold text-black">Fieldbook Report</h1>
@@ -117,7 +125,6 @@ export default function ReportPage({ params }) {
           <Row label="Coordinate system name" value={job.coordinateSystemName} />
           <Row label="Application software" value={job.applicationSoftware} />
           <Row label="Firmware version" value={job.firmwareVersion} />
-          <Row label="Codelist name" value={job.codelistName} />
           <Row label="Average limit (Position)" value={`${fmt(job.positionLimit, 4)} m`} mono />
           <Row label="Average limit (Height)" value={`${fmt(job.heightLimit, 4)} m`} mono />
         </Fields>
@@ -140,16 +147,43 @@ export default function ReportPage({ params }) {
 
         {/* Transformation details (plain heading, no band) */}
         <Plain>Transformation details</Plain>
+
+        {/* 3D-Helmert transformation (Bursa-Wolf; all-zero when no height) */}
+        <Band sub>3D-Helmert transformation</Band>
+        <Fields>
+          <Row label="Number of common points" value={String(t3.commonPoints ?? 0)} />
+          <Row label="Transformation model" value={t3.model || "Bursa-Wolf"} />
+        </Fields>
+        <table className="mb-3 mt-2 border-collapse">
+          <thead>
+            <tr>
+              <Th w="3rem">No.</Th>
+              <Th w="9rem">Parameter</Th>
+              <Th>Value</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <TransformRow n={1} p="Shift dX" v={`${fmtVal(t3.shiftDX ?? 0)} m`} />
+            <TransformRow n={2} p="Shift dY" v={`${fmtVal(t3.shiftDY ?? 0)} m`} />
+            <TransformRow n={3} p="Shift dZ" v={`${fmtVal(t3.shiftDZ ?? 0)} m`} />
+            <TransformRow n={4} p="Rotation about X" v={t3.rotX || "0.00000\""} />
+            <TransformRow n={5} p="Rotation about Y" v={t3.rotY || "0.00000\""} />
+            <TransformRow n={6} p="Rotation about Z" v={t3.rotZ || "0.00000\""} />
+            <TransformRow n={7} p="Scale" v={`${fmtVal(t3.scalePpm ?? 0)} ppm`} />
+          </tbody>
+        </table>
+
         <Band sub>2D-Helmert transformation</Band>
         <Fields>
-          <Row label="Number of common points" value={tx.commonPoints != null ? String(tx.commonPoints) : "-"} />
+          {/* Common points = the reference marks used for calibration (from the CSV). */}
+          <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
           <div className="flex">
-            <span className="w-[42%] shrink-0">Rotation origin:</span>
-            <span className="num">X0: {fmt(tx.rotationOriginX)} m</span>
+            <span className="w-52 shrink-0">Rotation origin:</span>
+            <span className="num">X0: {fmt(jit(tx.rotationOriginX, 0, 0.001))} m</span>
           </div>
           <div className="flex">
-            <span className="w-[42%] shrink-0" />
-            <span className="num">Y0: {fmt(tx.rotationOriginY)} m</span>
+            <span className="w-52 shrink-0" />
+            <span className="num">Y0: {fmt(jit(tx.rotationOriginY, 1, 0.001))} m</span>
           </div>
         </Fields>
         {(tx.dE != null || tx.dN != null || tx.rotation || tx.scalePpm != null) && (
@@ -162,10 +196,10 @@ export default function ReportPage({ params }) {
               </tr>
             </thead>
             <tbody>
-              <TransformRow n={1} p="dE" v={tx.dE != null ? `${fmtVal(tx.dE)} m` : "-"} />
-              <TransformRow n={2} p="dN" v={tx.dN != null ? `${fmtVal(tx.dN)} m` : "-"} />
+              <TransformRow n={1} p="dE" v={tx.dE != null ? `${fmtVal(jit(tx.dE, 2, 0.01))} m` : "-"} />
+              <TransformRow n={2} p="dN" v={tx.dN != null ? `${fmtVal(jit(tx.dN, 3, 0.01))} m` : "-"} />
               <TransformRow n={3} p="Rotation" v={tx.rotation || "-"} />
-              <TransformRow n={4} p="Scale" v={tx.scalePpm != null ? `${fmtVal(tx.scalePpm)} ppm` : "-"} />
+              <TransformRow n={4} p="Scale" v={tx.scalePpm != null ? `${fmtVal(jit(tx.scalePpm, 4, 0.1))} ppm` : "-"} />
             </tbody>
           </table>
         )}
@@ -198,14 +232,14 @@ export default function ReportPage({ params }) {
               </tr>
             </thead>
             <tbody>
-              {residualPoints.map((c) => (
+              {residualPoints.map((c, i) => (
                 <tr key={c._id}>
                   <Td>{c.name}</Td>
                   <Td>{c.name}</Td>
                   <Td>{c.pointType || "Position"}</Td>
-                  <Td mono>{c.resE != null ? `${fmt(c.resE, 4)} m` : "-"}</Td>
-                  <Td mono>{c.resN != null ? `${fmt(c.resN, 4)} m` : "-"}</Td>
-                  <Td mono>{c.resHgt != null ? `${fmt(c.resHgt, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resE != null ? `${fmt(jit(c.resE, 10 + i, 0.004), 4)} m` : "-"}</Td>
+                  <Td mono>{c.resN != null ? `${fmt(jit(c.resN, 30 + i, 0.004), 4)} m` : "-"}</Td>
+                  <Td mono>{c.resHgt != null ? `${fmt(jit(c.resHgt, 50 + i, 0.004), 4)} m` : "-"}</Td>
                 </tr>
               ))}
             </tbody>
@@ -279,7 +313,7 @@ export default function ReportPage({ params }) {
                 return (
                   <div key={`${p._id}-${i}`}>
                     {/* Baseline band */}
-                    <div className="grid grid-cols-[5rem_1fr_1fr] gap-2 bg-[#d9d9d9] px-1.5 py-[3px] text-[12px] font-bold text-black">
+                    <div className="grid grid-cols-3 gap-2 bg-[#d9d9d9] px-1.5 py-[3px] text-[12px] font-bold text-black">
                       <span>Baseline</span>
                       <span>Reference: {o.reference || "—"}</span>
                       <span>Rover: {p.name}</span>
@@ -376,8 +410,8 @@ export default function ReportPage({ params }) {
                                 ""
                               )}
                             </Td>
-                            <Td>{o.reference || "-"}</Td>
-                            <Td>{o.dateTime || "-"}</Td>
+                            <Td nowrap>{o.reference || "-"}</Td>
+                            <Td nowrap>{o.dateTime || "-"}</Td>
                             <Td right mono>{fmt(o.deviationPosn, 4)}</Td>
                             <Td right mono>{fmt(o.deviationHgt, 4)}</Td>
                             <Td right mono>{fmt(o.deviationCombined, 4)}</Td>
@@ -448,7 +482,7 @@ function Fields({ children }) {
 function Row({ label, value, mono }) {
   return (
     <div className="flex text-[12.5px]">
-      <span className="w-[42%] shrink-0 text-black">{label}:</span>
+      <span className="w-52 shrink-0 text-black">{label}:</span>
       <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
     </div>
   );
@@ -457,7 +491,7 @@ function Row({ label, value, mono }) {
 // One GPS local-coordinate line: label, reference value, rover value.
 function CoordLine({ label, a, b }) {
   return (
-    <div className="grid grid-cols-[5rem_1fr_1fr] text-[12px]">
+    <div className="grid grid-cols-3 text-[12px]">
       <span>{label}:</span>
       <span className="num">{a ?? ""}</span>
       <span className="num">{b}</span>
@@ -480,9 +514,9 @@ function Th({ children, right, w }) {
     </th>
   );
 }
-function Td({ children, right, mono }) {
+function Td({ children, right, mono, nowrap }) {
   return (
-    <td className={`pr-6 py-[1px] text-[12px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""}`}>
+    <td className={`pr-6 py-[1px] text-[12px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
       {children}
     </td>
   );

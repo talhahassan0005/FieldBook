@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { parsePastedRows, pairPolars, classifyPointKind } from "@/lib/csv";
+import { parsePastedRows, pairPolars } from "@/lib/csv";
 import { computeSurveyPoint, fmt } from "@/lib/survey";
 import StatusBadge from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
@@ -28,7 +28,10 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
   const [firstText, setFirstText] = useState("");
   const [secondText, setSecondText] = useState("");
   const [overwrite, setOverwrite] = useState(false);
-  const [autoSplit, setAutoSplit] = useState(true); // route reference marks → control points
+  // Per-point type override: { [name]: "Beacon" | "Reference Mark" | "Working Point" }.
+  // Default is Beacon (a survey point); the surveyor marks reference marks / the
+  // working point in the preview. Reference Mark + Working Point → control points.
+  const [typeByName, setTypeByName] = useState({});
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -39,74 +42,85 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
   );
 
   const parsed = useMemo(() => {
+    // Build one unified point object (with its current Type) from grouped rows.
+    const toPoint = (name, groupRows) => {
+      const first = groupRows[0];
+      // Every point defaults to Beacon (a survey point); the surveyor marks the
+      // reference marks and the working point explicitly in the preview.
+      const type = typeByName[name] ?? "Beacon";
+      const isControl = type === "Reference Mark" || type === "Working Point";
+      const multi = groupRows.length > 1;
+      const observations = groupRows.map((row, i) => ({
+        reference: row.reference || (multi ? `Polar ${i + 1}` : singleRef || "STN"),
+        dateTime: row.dateTime || "",
+        easting: row.easting,
+        northing: row.northing,
+        height: row.height ?? null,
+        sdE: row.sdE ?? null,
+        sdN: row.sdN ?? null,
+        sdHgt: row.sdHgt ?? null,
+      }));
+      return {
+        name,
+        type,
+        isControl,
+        code: first.code || "",
+        easting: first.easting,
+        northing: first.northing,
+        height: first.height ?? null,
+        wgs84X: first.wgs84X ?? null,
+        wgs84Y: first.wgs84Y ?? null,
+        wgs84Z: first.wgs84Z ?? null,
+        resE: first.resE ?? null,
+        resN: first.resN ?? null,
+        resHgt: first.resHgt ?? null,
+        observations,
+        computed: computeSurveyPoint(observations, limits || {}),
+      };
+    };
+
     if (mode === "single") {
       const { rows, errors } = parsePastedRows(singleText, columns);
-      // Group by point name: a name that repeats = the SAME point measured more
-      // than once = double polar. Order is preserved (Map keeps insertion order).
+      // Group by point name: a repeated name = the SAME point measured more than
+      // once = double polar. Order preserved (Map keeps insertion order).
       const groups = new Map();
       for (const row of rows) {
         if (!groups.has(row.name)) groups.set(row.name, []);
         groups.get(row.name).push(row);
       }
-      const surveyPreview = [];
-      const controlPreview = [];
-      for (const [name, groupRows] of groups) {
-        const first = groupRows[0];
-        // Auto-split: reference marks (WP/BRM/IPC…) become control points.
-        if (autoSplit && classifyPointKind(first) === "control") {
-          controlPreview.push({
-            name,
-            code: first.code || "",
-            pointType: "Position",
-            easting: first.easting,
-            northing: first.northing,
-            height: first.height ?? null,
-            // Calibration columns (WGS-84 Cartesian + grid residuals), if present.
-            wgs84X: first.wgs84X ?? null,
-            wgs84Y: first.wgs84Y ?? null,
-            wgs84Z: first.wgs84Z ?? null,
-            resE: first.resE ?? null,
-            resN: first.resN ?? null,
-            resHgt: first.resHgt ?? null,
-          });
-          continue;
-        }
-        // One observation per row. A repeated name → multiple observations
-        // (double polar). Use the row's own reference column if present, else
-        // label them Polar 1 / Polar 2…; a single-obs point keeps the typed ref.
-        const multi = groupRows.length > 1;
-        const observations = groupRows.map((row, i) => ({
-          reference: row.reference || (multi ? `Polar ${i + 1}` : singleRef || "STN"),
-          dateTime: row.dateTime || "",
-          easting: row.easting,
-          northing: row.northing,
-          height: row.height ?? null,
-          sdE: row.sdE ?? null,
-          sdN: row.sdN ?? null,
-          sdHgt: row.sdHgt ?? null,
-        }));
-        surveyPreview.push({
-          name,
-          code: first.code || "",
-          observations,
-          computed: computeSurveyPoint(observations, limits || {}),
-        });
-      }
-      return { surveyPreview, controlPreview, errors };
+      const points = [];
+      for (const [name, groupRows] of groups) points.push(toPoint(name, groupRows));
+      return { points, errors };
     } else {
       const first = parsePastedRows(firstText, columns);
       const second = parsePastedRows(secondText, columns);
-      const points = pairPolars(first.rows, second.rows, firstRef || "Polar 1", secondRef || "Polar 2");
-      const surveyPreview = points.map((p) => ({
-        ...p,
-        computed: computeSurveyPoint(p.observations, limits || {}),
-      }));
-      return { surveyPreview, controlPreview: [], errors: [...first.errors, ...second.errors] };
+      const paired = pairPolars(first.rows, second.rows, firstRef || "Polar 1", secondRef || "Polar 2");
+      const points = paired.map((p) => {
+        const type = typeByName[p.name] ?? "Beacon";
+        return {
+          name: p.name,
+          type,
+          isControl: type === "Reference Mark" || type === "Working Point",
+          code: p.code || "",
+          easting: p.observations[0]?.easting ?? null,
+          northing: p.observations[0]?.northing ?? null,
+          height: p.observations[0]?.height ?? null,
+          wgs84X: null, wgs84Y: null, wgs84Z: null, resE: null, resN: null, resHgt: null,
+          observations: p.observations,
+          computed: computeSurveyPoint(p.observations, limits || {}),
+        };
+      });
+      return { points, errors: [...first.errors, ...second.errors] };
     }
-  }, [mode, singleText, singleRef, firstText, secondText, columns, firstRef, secondRef, limits, autoSplit]);
+  }, [mode, singleText, singleRef, firstText, secondText, columns, firstRef, secondRef, limits, typeByName]);
 
-  const exceededCount = parsed.surveyPreview.filter((p) => p.computed.limitExceeded).length;
-  const totalCount = parsed.surveyPreview.length + parsed.controlPreview.length;
+  const surveyPreview = parsed.points.filter((p) => !p.isControl);
+  const controlPreview = parsed.points.filter((p) => p.isControl);
+  const exceededCount = surveyPreview.filter((p) => p.computed.limitExceeded).length;
+  const totalCount = parsed.points.length;
+  function setType(name, type) {
+    setTypeByName((prev) => ({ ...prev, [name]: type }));
+  }
 
   async function doImport() {
     if (!totalCount) {
@@ -120,20 +134,33 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
       let survey = null;
       let controlRes = null;
 
-      if (parsed.surveyPreview.length) {
+      if (surveyPreview.length) {
         survey = await api.post(`/api/jobs/${jobId}/survey/import`, {
           overwrite,
-          points: parsed.surveyPreview.map(({ name, code, observations }) => ({
+          points: surveyPreview.map(({ name, code, observations }) => ({
             name,
             code,
             observations,
           })),
         });
       }
-      if (parsed.controlPreview.length) {
+      if (controlPreview.length) {
         controlRes = await api.post(`/api/jobs/${jobId}/control/import`, {
           overwrite,
-          points: parsed.controlPreview,
+          points: controlPreview.map((p) => ({
+            name: p.name,
+            code: p.code,
+            pointType: p.type, // "Reference Mark" | "Working Point"
+            easting: p.easting,
+            northing: p.northing,
+            height: p.height,
+            wgs84X: p.wgs84X,
+            wgs84Y: p.wgs84Y,
+            wgs84Z: p.wgs84Z,
+            resE: p.resE,
+            resN: p.resN,
+            resHgt: p.resHgt,
+          })),
         });
       }
 
@@ -166,7 +193,7 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
           </h2>
           <p className="mt-1 text-xs text-slate-400">
             {mode === "single"
-              ? "Upload one CSV / paste below. Repeated point names are paired into double-polar observations; reference marks (WP/BRM/IPC…) are auto-routed to control points."
+              ? "Upload one CSV / paste below. Every point defaults to Beacon (a survey point) — set the Type for each reference mark and the working point in the preview below."
               : "Paste the machine CSV for each polar. Points are matched by name and the mean + differences are computed automatically."}
           </p>
         </div>
@@ -226,29 +253,12 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
 
       {/* Paste area: single mode or double-polar mode */}
       {mode === "single" ? (
-        <>
-          <SingleBox
-            refValue={singleRef}
-            onRef={setSingleRef}
-            text={singleText}
-            onText={setSingleText}
-          />
-          <label className="mt-3 flex items-start gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={autoSplit}
-              onChange={(e) => setAutoSplit(e.target.checked)}
-            />
-            <span>
-              Auto-split reference marks into control points{" "}
-              <span className="text-slate-400">
-                (rows named WP/BRM/MTRM… or coded IPC/beacon become control points; the rest are survey points).
-                Add <span className="font-mono">code</span> to the column order to classify by feature code too.
-              </span>
-            </span>
-          </label>
-        </>
+        <SingleBox
+          refValue={singleRef}
+          onRef={setSingleRef}
+          text={singleText}
+          onText={setSingleText}
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <PolarBox
@@ -278,12 +288,16 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
         </div>
       )}
 
-      {/* Survey points preview */}
-      {parsed.surveyPreview.length > 0 && (
+      {/* Unified preview — set the Type for each point (Beacon / Reference Mark / Working Point) */}
+      {parsed.points.length > 0 && (
         <div className="mt-4">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Survey points — {parsed.surveyPreview.length}
+              Points — {parsed.points.length}{" "}
+              <span className="font-normal normal-case text-slate-400">
+                ({surveyPreview.length} beacon{surveyPreview.length === 1 ? "" : "s"} → survey,{" "}
+                {controlPreview.length} reference mark / working point → control)
+              </span>
             </h3>
             {exceededCount > 0 && (
               <span className="badge bg-red-100 text-red-700">
@@ -291,63 +305,47 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
               </span>
             )}
           </div>
-          <div className="max-h-72 overflow-auto rounded-lg border border-slate-200">
+          <div className="max-h-80 overflow-auto rounded-lg border border-slate-200">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-50">
                 <tr className="text-left text-xs uppercase text-slate-400">
                   <th className="px-3 py-2 font-semibold">Point</th>
+                  <th className="px-3 py-2 font-semibold">Type</th>
                   <th className="px-3 py-2 text-center font-semibold">Obs</th>
-                  <th className="px-3 py-2 text-right font-semibold">Mean E</th>
-                  <th className="px-3 py-2 text-right font-semibold">Mean N</th>
-                  <th className="px-3 py-2 text-right font-semibold">Posn diff</th>
+                  <th className="px-3 py-2 text-right font-semibold">Easting</th>
+                  <th className="px-3 py-2 text-right font-semibold">Northing</th>
                   <th className="px-3 py-2 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {parsed.surveyPreview.map((p) => (
+                {parsed.points.map((p) => (
                   <tr key={p.name} className="border-t border-slate-100">
                     <td className="px-3 py-1.5 font-medium text-slate-800">{p.name}</td>
+                    <td className="px-3 py-1.5">
+                      <select
+                        className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs"
+                        value={p.type}
+                        onChange={(e) => setType(p.name, e.target.value)}
+                      >
+                        <option value="Beacon">Beacon (survey)</option>
+                        <option value="Reference Mark">Reference Mark</option>
+                        <option value="Working Point">Working Point</option>
+                      </select>
+                    </td>
                     <td className="px-3 py-1.5 text-center text-slate-600">{p.computed.observationCount}</td>
-                    <td className="num px-3 py-1.5 text-right text-slate-600">{fmt(p.computed.meanEasting)}</td>
-                    <td className="num px-3 py-1.5 text-right text-slate-600">{fmt(p.computed.meanNorthing)}</td>
-                    <td className={`num px-3 py-1.5 text-right ${p.computed.positionExceeded ? "font-semibold text-red-600" : "text-slate-600"}`}>
-                      {fmt(p.computed.positionDiff)}
+                    <td className="num px-3 py-1.5 text-right text-slate-600">
+                      {fmt(p.isControl ? p.easting : p.computed.meanEasting)}
+                    </td>
+                    <td className="num px-3 py-1.5 text-right text-slate-600">
+                      {fmt(p.isControl ? p.northing : p.computed.meanNorthing)}
                     </td>
                     <td className="px-3 py-1.5">
-                      <StatusBadge computed={p.computed} />
+                      {p.isControl ? (
+                        <span className="badge bg-slate-100 text-slate-600">{p.type}</span>
+                      ) : (
+                        <StatusBadge computed={p.computed} />
+                      )}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Control points preview (auto-split) */}
-      {parsed.controlPreview.length > 0 && (
-        <div className="mt-4">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            Control / reference points — {parsed.controlPreview.length}{" "}
-            <span className="font-normal normal-case text-slate-400">(auto-split)</span>
-          </h3>
-          <div className="max-h-60 overflow-auto rounded-lg border border-slate-200">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-50">
-                <tr className="text-left text-xs uppercase text-slate-400">
-                  <th className="px-3 py-2 font-semibold">Point</th>
-                  <th className="px-3 py-2 font-semibold">Code</th>
-                  <th className="px-3 py-2 text-right font-semibold">Easting</th>
-                  <th className="px-3 py-2 text-right font-semibold">Northing</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parsed.controlPreview.map((p) => (
-                  <tr key={p.name} className="border-t border-slate-100">
-                    <td className="px-3 py-1.5 font-medium text-slate-800">{p.name}</td>
-                    <td className="px-3 py-1.5 text-slate-500">{p.code || "—"}</td>
-                    <td className="num px-3 py-1.5 text-right text-slate-600">{fmt(p.easting)}</td>
-                    <td className="num px-3 py-1.5 text-right text-slate-600">{fmt(p.northing)}</td>
                   </tr>
                 ))}
               </tbody>
