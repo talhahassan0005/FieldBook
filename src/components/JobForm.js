@@ -51,7 +51,20 @@ export default function JobForm({ initial, jobId }) {
   const [coordSystems, setCoordSystems] = useState([]);
 
   useEffect(() => {
-    api.get("/api/coordinate-systems").then(setCoordSystems).catch(() => {});
+    api
+      .get("/api/coordinate-systems")
+      .then((list) => {
+        const systems = Array.isArray(list) ? list : [];
+        setCoordSystems(systems);
+        // On a NEW job, auto-load the most recent coordinate system's calibration
+        // so it's pre-filled (the surveyor can switch it via the dropdown).
+        // Existing jobs keep their own saved values.
+        if (!jobId && systems.length > 0 && !initial?.coordinateSystemName) {
+          applyCoordSystem(systems[0]);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function set(field, value) {
