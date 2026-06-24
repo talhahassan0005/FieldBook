@@ -242,21 +242,6 @@ export default function JobForm({ initial, jobId }) {
               </p>
             )}
           </Field>
-<<<<<<< HEAD
-=======
-          {/* Transformation name (auto) and type (default) are background values — not shown in the UI */}
-          <input type="hidden" value={form.transformationName} readOnly />
-          <input type="hidden" value={form.transformationType || "Twostep"} readOnly />
-          <Field label="Pre-transformation name">
-            <input className="input" value={form.preTransformationName} onChange={(e) => set("preTransformationName", e.target.value)} placeholder="DSM_BNGR_To_BTRS" />
-          </Field>
-          <Field label="Residuals formula">
-            <input className="input" value={form.residualsFormula} onChange={(e) => set("residualsFormula", e.target.value)} placeholder="1 / ( distance^2 )" />
-          </Field>
-          <Field label="Local ellipsoid">
-            <input className="input" value={form.ellipsoid} onChange={(e) => set("ellipsoid", e.target.value)} placeholder="Clarke 1880" />
-          </Field>
->>>>>>> ca975730bab9f3d0523192bdc938c66563d0605b
           <Field label="Projection / LO">
             <input
               className="input"
