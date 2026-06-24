@@ -147,18 +147,6 @@ export default function JobForm({ initial, jobId }) {
     setForm((f) => ({ ...f, heightTransformation: { ...f.heightTransformation, [field]: value } }));
   }
 
-  function onLogoFile(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 500 * 1024) {
-      setError("Logo image is too large (max 500 KB). Please use a smaller image.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => set("logoUrl", reader.result);
-    reader.readAsDataURL(file);
-  }
-
   async function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -211,9 +199,6 @@ export default function JobForm({ initial, jobId }) {
       )}
 
       <section className="card p-5">
-        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-slate-500">
-          Job information
-        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Job name *">
             <input className="input" required aria-required="true" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="MATEBELE2022" />
@@ -224,38 +209,9 @@ export default function JobForm({ initial, jobId }) {
           <Field label="Job created (date/time)">
             <input className="input" value={form.jobCreated} onChange={(e) => setJobCreated(e.target.value)} placeholder="10/06/2022 07:54:48" />
           </Field>
-          <Field label="Company / firm (report header)">
-            <input className="input" value={form.company} onChange={(e) => set("company", e.target.value)} placeholder="Your survey firm" />
-          </Field>
           <Field label="Description" full>
             <input className="input" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="CAD / cadastral survey" />
           </Field>
-          <Field label="Time zone">
-            <input className="input" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} placeholder="2h 00'" />
-          </Field>
-          <Field label="Application software">
-            <input className="input" value={form.applicationSoftware} onChange={(e) => set("applicationSoftware", e.target.value)} placeholder="LEICA Geo Office 7.0" />
-          </Field>
-          <Field label="Firmware version">
-            <input className="input" value={form.firmwareVersion} onChange={(e) => set("firmwareVersion", e.target.value)} placeholder="5.60" />
-          </Field>
-          <div className="sm:col-span-2">
-            <label className="label">Company logo (shown on the report) — optional</label>
-            <div className="flex items-center gap-3">
-              {form.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.logoUrl} alt="logo" loading="lazy" className="h-12 w-auto rounded border border-slate-200 bg-white p-1" />
-              ) : (
-                <span className="text-xs text-slate-400">No logo</span>
-              )}
-              <input type="file" accept="image/*" onChange={onLogoFile} className="text-sm" />
-              {form.logoUrl && (
-                <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => set("logoUrl", "")}>
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       </section>
 
@@ -286,21 +242,6 @@ export default function JobForm({ initial, jobId }) {
               </p>
             )}
           </Field>
-          <Field label="Transformation name (auto)">
-            <input className="input bg-slate-50 text-slate-500" value={form.transformationName} readOnly tabIndex={-1} placeholder="(same as coordinate system name)" />
-          </Field>
-          <Field label="Transformation type (default)">
-            <input className="input bg-slate-50 text-slate-500" value={form.transformationType || "Twostep"} readOnly tabIndex={-1} />
-          </Field>
-          <Field label="Pre-transformation name">
-            <input className="input" value={form.preTransformationName} onChange={(e) => set("preTransformationName", e.target.value)} placeholder="DSM_BNGR_To_BTRS" />
-          </Field>
-          <Field label="Residuals formula">
-            <input className="input" value={form.residualsFormula} onChange={(e) => set("residualsFormula", e.target.value)} placeholder="1 / ( distance^2 )" />
-          </Field>
-          <Field label="Local ellipsoid">
-            <input className="input" value={form.ellipsoid} onChange={(e) => set("ellipsoid", e.target.value)} placeholder="Clarke 1880" />
-          </Field>
           <Field label="Projection / LO">
             <input
               className="input"
@@ -308,6 +249,7 @@ export default function JobForm({ initial, jobId }) {
               value={form.projection}
               onChange={(e) => set("projection", e.target.value)}
               placeholder="LO27 / TM27"
+              disabled={isSavedSystem}
             />
             <datalist id="lo-options">
               {LO_OPTIONS.map((lo) => (
@@ -315,76 +257,36 @@ export default function JobForm({ initial, jobId }) {
               ))}
             </datalist>
           </Field>
-          <Field label="Height mode">
-            <input className="input" value={form.heightMode} onChange={(e) => set("heightMode", e.target.value)} placeholder="Orthometric" />
-          </Field>
-          <Field label="Coordinate system created">
-            <input className="input" value={form.coordinateSystemCreated} onChange={(e) => set("coordinateSystemCreated", e.target.value)} placeholder="08/24/2018 11:37:24" />
-          </Field>
-          <Field label="Geoid model">
-            <input className="input" value={form.geoidModel} onChange={(e) => set("geoidModel", e.target.value)} placeholder="-" />
-          </Field>
-          <Field label="CSCS model">
-            <input className="input" value={form.cscsModel} onChange={(e) => set("cscsModel", e.target.value)} placeholder="-" />
-          </Field>
         </div>
 
-        {isSavedSystem && (
-          <p className="mt-4 text-[11px] italic text-slate-500">
-            Calibration is locked — it comes from the saved “{form.coordinateSystemName}” coordinate system (only Projection stays editable). Type a new name above to define a new system.
-          </p>
-        )}
-        <fieldset disabled={isSavedSystem} className="contents">
-        <h3 className="mb-2 mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">
-          2D-Helmert transformation
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Number of common points">
-            <input className="input num" value={form.transformation.commonPoints} onChange={(e) => setTransform("commonPoints", e.target.value)} placeholder="4" />
-          </Field>
-          <Field label="Rotation origin X0 (m)">
-            <input className="input num" value={form.transformation.rotationOriginX} onChange={(e) => setTransform("rotationOriginX", e.target.value)} placeholder="-0.0041" />
-          </Field>
-          <Field label="Rotation origin Y0 (m)">
-            <input className="input num" value={form.transformation.rotationOriginY} onChange={(e) => setTransform("rotationOriginY", e.target.value)} placeholder="-0.0047" />
-          </Field>
-        </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-4">
-          <Field label="dE (m)">
-            <input className="input num" value={form.transformation.dE} onChange={(e) => setTransform("dE", e.target.value)} placeholder="2370216.5416" />
-          </Field>
-          <Field label="dN (m)">
-            <input className="input num" value={form.transformation.dN} onChange={(e) => setTransform("dN", e.target.value)} placeholder="-47706.6053" />
-          </Field>
-          <Field label="Rotation">
-            <input className="input num" value={form.transformation.rotation} onChange={(e) => setTransform("rotation", e.target.value)} placeholder="-179°49'43.18702&quot;" />
-          </Field>
-          <Field label="Scale (ppm)">
-            <input className="input num" value={form.transformation.scalePpm} onChange={(e) => setTransform("scalePpm", e.target.value)} placeholder="-4.1346" />
-          </Field>
-        </div>
-
-        <h3 className="mb-2 mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">
-          Height transformation
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-4">
-          <Field label="Number of common points">
-            <input className="input num" value={form.heightTransformation.commonPoints} onChange={(e) => setHeightTransform("commonPoints", e.target.value)} placeholder="0" />
-          </Field>
-          <Field label="Mean accuracy (m)">
-            <input className="input num" value={form.heightTransformation.meanAccuracy} onChange={(e) => setHeightTransform("meanAccuracy", e.target.value)} placeholder="0.0000" />
-          </Field>
-          <Field label="Inclination X">
-            <input className="input num" value={form.heightTransformation.inclinationX} onChange={(e) => setHeightTransform("inclinationX", e.target.value)} placeholder="0° 00' 00.00000&quot;" />
-          </Field>
-          <Field label="Inclination Y">
-            <input className="input num" value={form.heightTransformation.inclinationY} onChange={(e) => setHeightTransform("inclinationY", e.target.value)} placeholder="0° 00' 00.00000&quot;" />
-          </Field>
-          <Field label="Parameters" full>
-            <input className="input num" value={form.heightTransformation.parameters} onChange={(e) => setHeightTransform("parameters", e.target.value)} placeholder="0.00000000  0.00000000  0.0000 m" />
-          </Field>
-        </div>
-        </fieldset>
+        {/*
+          Everything else below is calibration "default" data — it comes from the
+          saved coordinate system (or, once implemented, gets computed automatically
+          from the imported control-point CSV). The client doesn't want to see any
+          of it in the form, so it stays as plain background state: not rendered,
+          just carried along and saved with the job.
+        */}
+        <input type="hidden" value={form.transformationName} readOnly />
+        <input type="hidden" value={form.transformationType || "Twostep"} readOnly />
+        <input type="hidden" value={form.preTransformationName} readOnly />
+        <input type="hidden" value={form.residualsFormula} readOnly />
+        <input type="hidden" value={form.ellipsoid} readOnly />
+        <input type="hidden" value={form.heightMode} readOnly />
+        <input type="hidden" value={form.coordinateSystemCreated} readOnly />
+        <input type="hidden" value={form.geoidModel} readOnly />
+        <input type="hidden" value={form.cscsModel} readOnly />
+        <input type="hidden" value={form.transformation.commonPoints} readOnly />
+        <input type="hidden" value={form.transformation.rotationOriginX} readOnly />
+        <input type="hidden" value={form.transformation.rotationOriginY} readOnly />
+        <input type="hidden" value={form.transformation.dE} readOnly />
+        <input type="hidden" value={form.transformation.dN} readOnly />
+        <input type="hidden" value={form.transformation.rotation} readOnly />
+        <input type="hidden" value={form.transformation.scalePpm} readOnly />
+        <input type="hidden" value={form.heightTransformation.commonPoints} readOnly />
+        <input type="hidden" value={form.heightTransformation.meanAccuracy} readOnly />
+        <input type="hidden" value={form.heightTransformation.inclinationX} readOnly />
+        <input type="hidden" value={form.heightTransformation.inclinationY} readOnly />
+        <input type="hidden" value={form.heightTransformation.parameters} readOnly />
       </section>
 
       <section className="card p-5">

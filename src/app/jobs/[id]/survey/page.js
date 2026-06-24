@@ -140,7 +140,7 @@ export default function SurveyPointsPage({ params }) {
             jobId={id}
             limits={limits}
             includeHeight={includeHeight}
-            onImported={load}
+            onImported={async () => { await load(); setShowImport(false); }}
             onCancel={() => setShowImport(false)}
           />
         </div>

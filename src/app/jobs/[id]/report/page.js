@@ -14,13 +14,9 @@ export default function ReportPage({ params }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [generatedAt, setGeneratedAt] = useState("");
-  // Small per-download variation seeds (client: the calibration figures should
-  // not be identical on every download). Set once on mount; null = no variation.
-  const [jitter, setJitter] = useState(null);
 
   useEffect(() => {
     setGeneratedAt(new Date().toLocaleString());
-    setJitter(Array.from({ length: 64 }, () => Math.random() - 0.5));
     (async () => {
       try {
         const [j, c, s] = await Promise.all([
@@ -52,8 +48,6 @@ export default function ReportPage({ params }) {
   const tx = job.transformation || {};
   const t3 = job.transformation3D || {};
   const hx = job.heightTransformation || {};
-  // Tiny per-download offset for calibration figures (no-op until jitter loads).
-  const jit = (v, i, mag) => (v == null || jitter == null ? v : v + jitter[i % 64] * mag);
   const sortedControl = [...control].sort((a, b) => naturalCmp(a.name, b.name));
   const controlByName = Object.fromEntries(control.map((c) => [c.name, c]));
   const isIdentical = (c) => [c.wgs84X, c.wgs84Y, c.wgs84Z].some((v) => v != null);
@@ -95,17 +89,8 @@ export default function ReportPage({ params }) {
       </div>
 
       <div className="print-container mx-auto max-w-4xl bg-white px-12 py-10 text-[12.5px] leading-[1.45] text-black">
-        {/* Header — optional company logo top-right (no built-in/third-party logo:
-            the firm uploads its own, or leaves an empty box), centred title + date. */}
+        {/* Report header — centred title + date */}
         <div className="mb-6">
-          <div className="flex items-start justify-end">
-            {job.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={job.logoUrl} alt={job.company ? `${job.company} logo` : "Company logo"} className="h-16 w-auto max-w-[220px] object-contain" />
-            ) : (
-              <div className="h-16 w-56 border border-slate-300" aria-hidden="true" />
-            )}
-          </div>
           <h1 className="text-center text-[22px] font-bold text-black">Fieldbook Report</h1>
           <p className="mt-0.5 text-center text-[12px] text-black">{reportDate}</p>
         </div>
@@ -178,11 +163,11 @@ export default function ReportPage({ params }) {
           <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
           <div className="flex">
             <span className="w-52 shrink-0">Rotation origin:</span>
-            <span className="num">X0: {fmt(jit(tx.rotationOriginX, 0, 0.001))} m</span>
+            <span className="num">X0: {fmt(tx.rotationOriginX)} m</span>
           </div>
           <div className="flex">
             <span className="w-52 shrink-0" />
-            <span className="num">Y0: {fmt(jit(tx.rotationOriginY, 1, 0.001))} m</span>
+            <span className="num">Y0: {fmt(tx.rotationOriginY)} m</span>
           </div>
         </Fields>
         {(tx.dE != null || tx.dN != null || tx.rotation || tx.scalePpm != null) && (
@@ -195,10 +180,10 @@ export default function ReportPage({ params }) {
               </tr>
             </thead>
             <tbody>
-              <TransformRow n={1} p="dE" v={tx.dE != null ? `${fmtVal(jit(tx.dE, 2, 0.01))} m` : "-"} />
-              <TransformRow n={2} p="dN" v={tx.dN != null ? `${fmtVal(jit(tx.dN, 3, 0.01))} m` : "-"} />
+              <TransformRow n={1} p="dE" v={tx.dE != null ? `${fmtVal(tx.dE)} m` : "-"} />
+              <TransformRow n={2} p="dN" v={tx.dN != null ? `${fmtVal(tx.dN)} m` : "-"} />
               <TransformRow n={3} p="Rotation" v={tx.rotation || "-"} />
-              <TransformRow n={4} p="Scale" v={tx.scalePpm != null ? `${fmtVal(jit(tx.scalePpm, 4, 0.1))} ppm` : "-"} />
+              <TransformRow n={4} p="Scale" v={tx.scalePpm != null ? `${fmtVal(tx.scalePpm)} ppm` : "-"} />
             </tbody>
           </table>
         )}
@@ -236,9 +221,9 @@ export default function ReportPage({ params }) {
                   <Td>{c.name}</Td>
                   <Td>{c.name}</Td>
                   <Td>{c.pointType || "Position"}</Td>
-                  <Td mono>{c.resE != null ? `${fmt(jit(c.resE, 10 + i, 0.004), 4)} m` : "-"}</Td>
-                  <Td mono>{c.resN != null ? `${fmt(jit(c.resN, 30 + i, 0.004), 4)} m` : "-"}</Td>
-                  <Td mono>{c.resHgt != null ? `${fmt(jit(c.resHgt, 50 + i, 0.004), 4)} m` : "-"}</Td>
+                  <Td mono>{c.resE != null ? `${fmt(c.resE, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resN != null ? `${fmt(c.resN, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resHgt != null ? `${fmt(c.resHgt, 4)} m` : "-"}</Td>
                 </tr>
               ))}
             </tbody>
