@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "seed": "node scripts/seed.mjs",
-    "seed:matebele": "node scripts/seed-matebele.mjs"
+    "seed:matebele": "node scripts/seed-matebele.mjs",
+    "clean:placeholders": "node scripts/clean-placeholder-data.mjs"
   },
   "dependencies": {
     "mongoose": "^8.9.5",

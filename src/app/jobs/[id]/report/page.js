@@ -195,39 +195,37 @@ export default function ReportPage({ params }) {
           <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
           <div className="flex">
             <span className="w-52 shrink-0">Rotation origin:</span>
-            <span className="num">X0: {fmt(tx.rotationOriginX)} m</span>
+            <span className="num">X0: {fmt(tx.rotationOriginX ?? 0)} m</span>
           </div>
           <div className="flex">
             <span className="w-52 shrink-0" />
-            <span className="num">Y0: {fmt(tx.rotationOriginY)} m</span>
+            <span className="num">Y0: {fmt(tx.rotationOriginY ?? 0)} m</span>
           </div>
         </Fields>
-        {(tx.dE != null || tx.dN != null || tx.rotation || tx.scalePpm != null) && (
-          <table className="mt-2 border-collapse">
-            <thead>
-              <tr>
-                <Th w="3rem">No.</Th>
-                <Th w="8rem">Parameter</Th>
-                <Th>Value</Th>
-              </tr>
-            </thead>
-            <tbody>
-              <TransformRow n={1} p="dE" v={tx.dE != null ? `${fmtVal(tx.dE)} m` : "-"} />
-              <TransformRow n={2} p="dN" v={tx.dN != null ? `${fmtVal(tx.dN)} m` : "-"} />
-              <TransformRow n={3} p="Rotation" v={tx.rotation || "-"} />
-              <TransformRow n={4} p="Scale" v={tx.scalePpm != null ? `${fmtVal(tx.scalePpm)} ppm` : "-"} />
-            </tbody>
-          </table>
-        )}
+        <table className="mt-2 border-collapse">
+          <thead>
+            <tr>
+              <Th w="3rem">No.</Th>
+              <Th w="8rem">Parameter</Th>
+              <Th>Value</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <TransformRow n={1} p="dE" v={`${fmtVal(tx.dE ?? 0)} m`} />
+            <TransformRow n={2} p="dN" v={`${fmtVal(tx.dN ?? 0)} m`} />
+            <TransformRow n={3} p="Rotation" v={tx.rotation || "0° 00' 00.00000\""} />
+            <TransformRow n={4} p="Scale" v={`${fmtVal(tx.scalePpm ?? 0)} ppm`} />
+          </tbody>
+        </table>
 
         {/* Height transformation (sub-band) */}
         <Band sub>Height transformation</Band>
         <Fields>
           <Row label="Number of common points" value={String(calibrationPoints.length || hx.commonPoints || 0)} />
           <Row label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
-          <Row label="Parameters" value={hx.parameters || "-"} mono />
-          <Row label="Inclination of height in X" value={hx.inclinationX || "-"} />
-          <Row label="Inclination of height in Y" value={hx.inclinationY || "-"} />
+          <Row label="Parameters" value={hx.parameters || "0.00000000  0.00000000  0.0000 m"} mono />
+          <Row label="Inclination of height in X" value={hx.inclinationX || "0° 00' 00.00000\""} />
+          <Row label="Inclination of height in Y" value={hx.inclinationY || "0° 00' 00.00000\""} />
         </Fields>
 
         {/* Residuals (plain heading) */}
