@@ -249,11 +249,11 @@ export default function ReportPage({ params }) {
           {/* Common points = the reference marks used for calibration (from the CSV). */}
           <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
           <div className="flex text-[12.5px]">
-            <span className="w-52 shrink-0">Rotation origin:</span>
+            <span className="w-[26rem] shrink-0">Rotation origin:</span>
             <span className="num">X0: {fmt(rotOriginX)} m</span>
           </div>
           <div className="flex text-[12.5px]">
-            <span className="w-52 shrink-0" />
+            <span className="w-[26rem] shrink-0" />
             <span className="num">Y0: {fmt(rotOriginY)} m</span>
           </div>
         </Fields>
@@ -660,7 +660,7 @@ function Fields({ children }) {
 function Row({ label, value, mono }) {
   return (
     <div className="flex text-[12.5px]">
-      <span className="w-52 shrink-0 text-black">{label}:</span>
+      <span className="w-[26rem] shrink-0 text-black">{label}:</span>
       <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
     </div>
   );
