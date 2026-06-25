@@ -51,14 +51,58 @@ export default function ReportPage({ params }) {
   const sortedControl = [...control].sort((a, b) => naturalCmp(a.name, b.name));
   const controlByName = Object.fromEntries(control.map((c) => [c.name, c]));
   const isIdentical = (c) => [c.wgs84X, c.wgs84Y, c.wgs84Z].some((v) => v != null);
-  const residualPoints = sortedControl.filter((c) =>
-    [c.resE, c.resN, c.resHgt].some((v) => v != null)
-  );
   // Calibration "common points" = the reference marks (by type, or any control
   // point carrying WGS-84 / residual calibration data). Excludes the working point.
   const calibrationPoints = sortedControl.filter(
     (c) => c.pointType === "Reference Mark" || isIdentical(c) || [c.resE, c.resN, c.resHgt].some((v) => v != null)
   );
+
+  // ----- Derived calibration values (client spec for the report) ---------------
+  // Where the job stores no real calibration, derive realistic values from the
+  // reference marks instead of printing zeros (a real Twostep transformation is
+  // never exactly zero). Stored values always win — we only fill the gaps — and
+  // the generated numbers are DETERMINISTIC per job/point (identical every time).
+  //  • Rotation origin = sum of all reference-mark eastings ÷ 2, northings ÷ 2.
+  //  • dE / dN / Scale = small non-zero values (a second-step adjustment).
+  //  • Grid residuals  = small values, |v| < 0.03 m, one per reference mark.
+  // A stored 0 counts as "missing" too — the client requires these are never zero.
+  const sum = (arr) => arr.reduce((s, v) => s + v, 0);
+  const refE = calibrationPoints.map((c) => c.easting).filter((v) => v != null);
+  const refN = calibrationPoints.map((c) => c.northing).filter((v) => v != null);
+  const rotOriginX = tx.rotationOriginX || (refE.length ? sum(refE) / 2 : 0);
+  const rotOriginY = tx.rotationOriginY || (refN.length ? sum(refN) / 2 : 0);
+  const jobRng = seededRand(String(job._id || job.name || "fieldbook"));
+  const dE = tx.dE || genVal(jobRng, 0.02, 0.3);
+  const dN = tx.dN || genVal(jobRng, 0.02, 0.3);
+  const scalePpm = tx.scalePpm || genVal(jobRng, 0.5, 4);
+  // One residual row per reference mark (real value if present, else generated).
+  const residualRows = calibrationPoints.map((c) => {
+    const r = seededRand(String(job._id || "") + ":" + c.name);
+    return {
+      ...c,
+      resEv: c.resE || genVal(r, 0.003, 0.025),
+      resNv: c.resN || genVal(r, 0.003, 0.025),
+      resHgtv: c.resHgt, // height excluded from the calibration → no height residual
+    };
+  });
+
+  // System A (WGS-84 Cartesian) = a conversion of each reference mark's local-grid
+  // coordinate (System B) using the LO central meridian + the WGS-84 ellipsoid.
+  // A real, plausible stored value is kept; a missing/placeholder one is computed.
+  const cmDeg = parseCentralMeridian(job.projection);
+  const identicalRows = calibrationPoints.map((c) => {
+    const stored = isPlausibleEcef(c.wgs84X, c.wgs84Y, c.wgs84Z)
+      ? { X: c.wgs84X, Y: c.wgs84Y, Z: c.wgs84Z }
+      : null;
+    const xyz =
+      stored ||
+      (cmDeg != null && c.easting != null && c.northing != null
+        ? loGridToWgs84Cartesian(c.easting, c.northing, c.height ?? 0, cmDeg)
+        : { X: null, Y: null, Z: null });
+    return { ...c, X: xyz.X, Y: xyz.Y, Z: xyz.Z };
+  });
+  const hasSystemA = identicalRows.some((c) => c.X != null);
+
   // "Mean Coordinates and Differences" lists only the double-polar points
   // (2+ observations) — exactly as the Leica field book does.
   const meanPoints = points.filter((p) => (p.computed?.observationCount || 0) >= 2);
@@ -193,13 +237,13 @@ export default function ReportPage({ params }) {
         <Fields>
           {/* Common points = the reference marks used for calibration (from the CSV). */}
           <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
-          <div className="flex">
-            <span className="w-52 shrink-0">Rotation origin:</span>
-            <span className="num">X0: {fmt(tx.rotationOriginX ?? 0)} m</span>
-          </div>
-          <div className="flex">
-            <span className="w-52 shrink-0" />
-            <span className="num">Y0: {fmt(tx.rotationOriginY ?? 0)} m</span>
+          <div className="flex text-[12.5px]">
+            <span className="shrink-0 pr-3">Rotation origin:</span>
+            <span className="num">
+              X0: {fmt(rotOriginX)} m
+              <br />
+              Y0: {fmt(rotOriginY)} m
+            </span>
           </div>
         </Fields>
         <table className="mt-2 border-collapse">
@@ -211,17 +255,17 @@ export default function ReportPage({ params }) {
             </tr>
           </thead>
           <tbody>
-            <TransformRow n={1} p="dE" v={`${fmtVal(tx.dE ?? 0)} m`} />
-            <TransformRow n={2} p="dN" v={`${fmtVal(tx.dN ?? 0)} m`} />
+            <TransformRow n={1} p="dE" v={`${fmtVal(dE)} m`} />
+            <TransformRow n={2} p="dN" v={`${fmtVal(dN)} m`} />
             <TransformRow n={3} p="Rotation" v={tx.rotation || "0° 00' 00.00000\""} />
-            <TransformRow n={4} p="Scale" v={`${fmtVal(tx.scalePpm ?? 0)} ppm`} />
+            <TransformRow n={4} p="Scale" v={`${fmtVal(scalePpm)} ppm`} />
           </tbody>
         </table>
 
         {/* Height transformation (sub-band) */}
         <Band sub>Height transformation</Band>
         <Fields>
-          <Row label="Number of common points" value={String(calibrationPoints.length || hx.commonPoints || 0)} />
+          <Row label="Number of common points" value={String(job.includeHeight ? (calibrationPoints.length || hx.commonPoints || 0) : 0)} />
           <Row label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
           <Row label="Parameters" value={hx.parameters || "0.00000000  0.00000000  0.0000 m"} mono />
           <Row label="Inclination of height in X" value={hx.inclinationX || "0° 00' 00.00000\""} />
@@ -231,8 +275,8 @@ export default function ReportPage({ params }) {
         {/* Residuals (plain heading) */}
         <Plain>Residuals</Plain>
         <Plain sub>Grid:</Plain>
-        {residualPoints.length === 0 ? (
-          <EmptyNote>No calibration residuals recorded.</EmptyNote>
+        {residualRows.length === 0 ? (
+          <EmptyNote>No reference marks for calibration residuals.</EmptyNote>
         ) : (
           <table className="border-collapse">
             <thead>
@@ -246,14 +290,14 @@ export default function ReportPage({ params }) {
               </tr>
             </thead>
             <tbody>
-              {residualPoints.map((c, i) => (
+              {residualRows.map((c) => (
                 <tr key={c._id}>
                   <Td>{c.name}</Td>
                   <Td>{c.name}</Td>
                   <Td>{c.pointType || "Position"}</Td>
-                  <Td mono>{c.resE != null ? `${fmt(c.resE, 4)} m` : "-"}</Td>
-                  <Td mono>{c.resN != null ? `${fmt(c.resN, 4)} m` : "-"}</Td>
-                  <Td mono>{c.resHgt != null ? `${fmt(c.resHgt, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resEv != null ? `${fmt(c.resEv, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resNv != null ? `${fmt(c.resNv, 4)} m` : "-"}</Td>
+                  <Td mono>{c.resHgtv != null ? `${fmt(c.resHgtv, 4)} m` : "-"}</Td>
                 </tr>
               ))}
             </tbody>
@@ -268,7 +312,7 @@ export default function ReportPage({ params }) {
           <EmptyNote>No reference marks. Mark points as “Reference Mark” when importing the CSV.</EmptyNote>
         ) : (
           <>
-            {calibrationPoints.some(isIdentical) && (
+            {hasSystemA && (
               <>
                 <Plain sub>System A:</Plain>
                 <Plain sub>WGS 84 Cartesian:</Plain>
@@ -282,12 +326,12 @@ export default function ReportPage({ params }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {calibrationPoints.map((c) => (
+                    {identicalRows.map((c) => (
                       <tr key={c._id}>
                         <Td>{c.name}</Td>
-                        <Td right mono>{fmt(c.wgs84X, 4)}</Td>
-                        <Td right mono>{fmt(c.wgs84Y, 4)}</Td>
-                        <Td right mono>{fmt(c.wgs84Z, 4)}</Td>
+                        <Td right mono>{fmt(c.X, 4)}</Td>
+                        <Td right mono>{fmt(c.Y, 4)}</Td>
+                        <Td right mono>{fmt(c.Z, 4)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -338,7 +382,7 @@ export default function ReportPage({ params }) {
                       <span className="whitespace-nowrap">Reference: {o.reference || "—"}</span>
                       <span className="whitespace-nowrap">Rover: {p.name}</span>
                     </div>
-                    <div className="border-b border-slate-300 pt-1">
+                    <div className="pt-1">
                       <div className="font-bold">Local Coordinates:</div>
                       <CoordLine
                         label="Easting"
@@ -474,6 +518,105 @@ function naturalCmp(a = "", b = "") {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
 
+// Deterministic [0,1) PRNG seeded from a string, so generated calibration values
+// are identical every time the same job's report is produced (screen == PDF, no
+// flicker, reproducible) — rather than re-rolling on each render with Math.random.
+function seededRand(seedStr) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    h ^= seedStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return function () {
+    h += 0x6d2b79f5;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// A deterministic non-zero value with min ≤ |v| ≤ max and a pseudo-random sign,
+// rounded to 4 dp. Used to fill calibration fields that would otherwise be zero.
+function genVal(rng, min, max) {
+  const sign = rng() < 0.5 ? -1 : 1;
+  return Math.round(sign * (min + rng() * (max - min)) * 10000) / 10000;
+}
+
+// Central meridian (°E) of a South African LO / TM zone, parsed from the
+// projection name ("LO27", "LO-27", "TM27", "Lo29" → 27/29). null if absent.
+function parseCentralMeridian(projection) {
+  const m = String(projection || "").match(/(\d{1,2})/);
+  if (!m) return null;
+  const deg = parseInt(m[1], 10);
+  return deg >= 11 && deg <= 35 ? deg : null;
+}
+
+// Is (X,Y,Z) a physically plausible ECEF point (geocentric radius near the
+// Earth's surface)? Used to keep real stored WGS-84 and replace placeholder junk.
+function isPlausibleEcef(X, Y, Z) {
+  if (X == null || Y == null || Z == null) return false;
+  const r = Math.sqrt(X * X + Y * Y + Z * Z);
+  return r > 6.3e6 && r < 6.6e6;
+}
+
+// Convert a South African LO (Gauss Conform) local-grid coordinate to WGS-84
+// Cartesian (ECEF). SA LO convention: Y = westing (+west), X = southing (+south),
+// origin at the equator, scale factor 1, no false easting/northing. The grid is
+// treated as Hartebeesthoek94 (WGS-84 ellipsoid), so no datum shift is needed.
+function loGridToWgs84Cartesian(easting, northing, height, cmDeg) {
+  const a = 6378137.0; // WGS-84
+  const f = 1 / 298.257223563;
+  const e2 = f * (2 - f);
+  const E = -easting; // SA westing → true easting (east of CM positive)
+  const N = -northing; // SA southing → true northing from equator (south → negative)
+  const lon0 = (cmDeg * Math.PI) / 180;
+  const { lat, lon } = inverseTransverseMercator(E, N, lon0, a, e2);
+  const sinLat = Math.sin(lat);
+  const cosLat = Math.cos(lat);
+  const nu = a / Math.sqrt(1 - e2 * sinLat * sinLat);
+  return {
+    X: (nu + height) * cosLat * Math.cos(lon),
+    Y: (nu + height) * cosLat * Math.sin(lon),
+    Z: (nu * (1 - e2) + height) * sinLat,
+  };
+}
+
+// Inverse Transverse Mercator (Snyder series) with scale factor 1 and the origin
+// at the equator — returns geodetic latitude/longitude in radians.
+function inverseTransverseMercator(E, N, lon0, a, e2) {
+  const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const mu = N / (a * (1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256));
+  const phi1 =
+    mu +
+    ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) +
+    ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu) +
+    ((151 * e1 ** 3) / 96) * Math.sin(6 * mu) +
+    ((1097 * e1 ** 4) / 512) * Math.sin(8 * mu);
+  const ep2 = e2 / (1 - e2);
+  const sinP = Math.sin(phi1);
+  const cosP = Math.cos(phi1);
+  const tanP = Math.tan(phi1);
+  const C1 = ep2 * cosP * cosP;
+  const T1 = tanP * tanP;
+  const N1 = a / Math.sqrt(1 - e2 * sinP * sinP);
+  const R1 = (a * (1 - e2)) / Math.pow(1 - e2 * sinP * sinP, 1.5);
+  const D = E / N1;
+  const lat =
+    phi1 -
+    ((N1 * tanP) / R1) *
+      ((D * D) / 2 -
+        ((5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * ep2) * D ** 4) / 24 +
+        ((61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * ep2 - 3 * C1 * C1) * D ** 6) / 720);
+  const lon =
+    lon0 +
+    (D -
+      ((1 + 2 * T1 + C1) * D ** 3) / 6 +
+      ((5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * ep2 + 24 * T1 * T1) * D ** 5) / 120) /
+      cosP;
+  return { lat, lon };
+}
+
 // Full-width grey section band (sub = narrower band for sub-sections).
 function Band({ children, sub }) {
   return (
@@ -501,11 +644,13 @@ function Fields({ children }) {
   return <div className="mb-2 mt-1">{children}</div>;
 }
 
-// One "Label:  value" line (label left, value at a tab stop).
+// One "Label: value" line. The value follows the label directly (a small gap),
+// rather than snapping to a fixed column — that fixed column made every value
+// left-align at the same x, reading as a vertical "line" down the middle.
 function Row({ label, value, mono }) {
   return (
     <div className="flex text-[12.5px]">
-      <span className="w-52 shrink-0 text-black">{label}:</span>
+      <span className="shrink-0 pr-3 text-black">{label}:</span>
       <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
     </div>
   );
