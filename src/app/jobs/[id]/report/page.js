@@ -73,15 +73,16 @@ export default function ReportPage({ params }) {
   // reference marks instead of printing zeros (a real Twostep transformation is
   // never exactly zero). Stored values always win — we only fill the gaps — and
   // the generated numbers are DETERMINISTIC per job/point (identical every time).
-  //  • Rotation origin = sum of all reference-mark eastings ÷ 2, northings ÷ 2.
+  //  • Rotation origin (client formula): X0 = Σ(reference-mark northings) ÷ 2,
+  //    Y0 = Σ(reference-mark eastings) ÷ 2 (SA convention: X = southing, Y = westing).
   //  • dE / dN / Scale = small non-zero values (a second-step adjustment).
   //  • Grid residuals  = small values, |v| < 0.03 m, one per reference mark.
   // A stored 0 counts as "missing" too — the client requires these are never zero.
   const sum = (arr) => arr.reduce((s, v) => s + v, 0);
   const refE = calibrationPoints.map((c) => c.easting).filter((v) => v != null);
   const refN = calibrationPoints.map((c) => c.northing).filter((v) => v != null);
-  const rotOriginX = tx.rotationOriginX || (refE.length ? sum(refE) / 2 : 0);
-  const rotOriginY = tx.rotationOriginY || (refN.length ? sum(refN) / 2 : 0);
+  const rotOriginX = tx.rotationOriginX || (refN.length ? sum(refN) / 2 : 0);
+  const rotOriginY = tx.rotationOriginY || (refE.length ? sum(refE) / 2 : 0);
   const jobRng = seededRand(String(job._id || job.name || "fieldbook"));
   const dE = tx.dE || genVal(jobRng, 0.02, 0.3);
   const dN = tx.dN || genVal(jobRng, 0.02, 0.3);
@@ -229,7 +230,7 @@ export default function ReportPage({ params }) {
           <thead>
             <tr>
               <Th w="3rem">No.</Th>
-              <Th w="9rem">Parameter</Th>
+              <Th w="23rem">Parameter</Th>
               <Th>Value</Th>
             </tr>
           </thead>
@@ -261,7 +262,7 @@ export default function ReportPage({ params }) {
           <thead>
             <tr>
               <Th w="3rem">No.</Th>
-              <Th w="8rem">Parameter</Th>
+              <Th w="23rem">Parameter</Th>
               <Th>Value</Th>
             </tr>
           </thead>
@@ -289,7 +290,7 @@ export default function ReportPage({ params }) {
         {residualRows.length === 0 ? (
           <EmptyNote>No reference marks for calibration residuals.</EmptyNote>
         ) : (
-          <table className="border-collapse">
+          <table className="w-full border-collapse">
             <thead>
               <tr>
                 <Th>System A</Th>
@@ -327,7 +328,7 @@ export default function ReportPage({ params }) {
               <>
                 <Plain sub>System A:</Plain>
                 <Plain sub>WGS 84 Cartesian:</Plain>
-                <table className="mb-2 border-collapse">
+                <table className="mb-2 w-full border-collapse">
                   <thead>
                     <tr>
                       <Th w="6rem">Point</Th>
@@ -351,7 +352,7 @@ export default function ReportPage({ params }) {
             )}
             <Plain sub>System B:</Plain>
             <Plain sub>Local Grid:</Plain>
-            <table className="border-collapse">
+            <table className="w-full border-collapse">
               <thead>
                 <tr>
                   <Th w="6rem">Point</Th>
