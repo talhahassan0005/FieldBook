@@ -329,15 +329,15 @@ export default function ReportPage({ params }) {
         {residualRows.length === 0 ? (
           <EmptyNote>No reference marks for calibration residuals.</EmptyNote>
         ) : (
-          <table className="w-full border-collapse">
+          <table className="w-full table-fixed border-collapse">
             <thead>
               <tr>
-                <Th w="6rem">System A</Th>
-                <Th w="6rem">System B</Th>
-                <Th>Point type</Th>
-                <Th right>dE [m]</Th>
-                <Th right>dN [m]</Th>
-                <Th right>dHgt [m]</Th>
+                <Th w="13%">System A</Th>
+                <Th w="12%">System B</Th>
+                <Th w="18%">Point type</Th>
+                <Th w="19%" right>dE [m]</Th>
+                <Th w="19%" right>dN [m]</Th>
+                <Th w="19%" right>dHgt [m]</Th>
               </tr>
             </thead>
             <tbody>
@@ -367,13 +367,13 @@ export default function ReportPage({ params }) {
               <>
                 <Plain sub>System A:</Plain>
                 <Plain sub>WGS 84 Cartesian:</Plain>
-                <table className="mb-2 w-full border-collapse">
+                <table className="mb-2 w-full table-fixed border-collapse">
                   <thead>
                     <tr>
-                      <Th w="6rem">Point</Th>
-                      <Th right>X [m]</Th>
-                      <Th right>Y [m]</Th>
-                      <Th right>Z [m]</Th>
+                      <Th w="43%">Point</Th>
+                      <Th w="19%" right>X [m]</Th>
+                      <Th w="19%" right>Y [m]</Th>
+                      <Th w="19%" right>Z [m]</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -391,13 +391,13 @@ export default function ReportPage({ params }) {
             )}
             <Plain sub>System B:</Plain>
             <Plain sub>Local Grid:</Plain>
-            <table className="w-full border-collapse">
+            <table className="w-full table-fixed border-collapse">
               <thead>
                 <tr>
-                  <Th w="6rem">Point</Th>
-                  <Th right>Easting [m]</Th>
-                  <Th right>Northing [m]</Th>
-                  <Th right>Hgt [m]</Th>
+                  <Th w="43%">Point</Th>
+                  <Th w="19%" right>Easting [m]</Th>
+                  <Th w="19%" right>Northing [m]</Th>
+                  <Th w="19%" right>Hgt [m]</Th>
                 </tr>
               </thead>
               <tbody>
