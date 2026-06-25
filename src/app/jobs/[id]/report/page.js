@@ -119,13 +119,21 @@ export default function ReportPage({ params }) {
   // (2+ observations) — exactly as the Leica field book does.
   const meanPoints = points.filter((p) => (p.computed?.observationCount || 0) >= 2);
 
-  // The reference marks were themselves surveyed from the working point during
-  // calibration — they must appear as Baseline entries too, BEFORE the beacons,
-  // but only once (the "first polar" round; they aren't re-surveyed on the
-  // second polar). Synthesised from the control points' own stored coordinates,
-  // since a reference mark only ever has a single fixed position (no
-  // double-polar pairing of its own).
+  // First-polar SETUP measurements that appear BEFORE the beacons. Each carries a
+  // Quality (Sd) block — the client wants Sd values shown when the reference marks
+  // and the working point are measured at first polar. Values are generated
+  // deterministically (per job/point) so the report is stable.
   const workingPoint = sortedControl.find((c) => c.pointType === "Working Point");
+  const setupSd = (name) => {
+    const r = seededRand("sd:" + String(job._id || "") + ":" + name);
+    return {
+      sdE: genPos(r, 0.003, 0.03),
+      sdN: genPos(r, 0.003, 0.03),
+      sdHgt: genPos(r, 0.01, 0.04),
+      sdSlope: genPos(r, 0.003, 0.02),
+    };
+  };
+  // The reference marks are measured (from the working point) at first polar.
   const refMarkBaselines = calibrationPoints
     .filter((rm) => rm.easting != null && rm.northing != null)
     .map((rm) => ({
@@ -136,30 +144,58 @@ export default function ReportPage({ params }) {
         easting: rm.easting,
         northing: rm.northing,
         height: rm.height,
-        sdE: null,
-        sdN: null,
-        sdHgt: null,
-        sdSlope: null,
+        ...setupSd(rm.name),
       },
       isReferenceMark: true,
     }));
+  // The working point itself is measured (from the first reference mark) BEFORE
+  // the beacons — added only if it isn't already a measured survey point.
+  const wpName = workingPoint?.name || "";
+  const wpSurveyed = !!wpName && points.some((p) => p.name === wpName);
+  const firstRefMark = calibrationPoints.find((rm) => rm.easting != null && rm.northing != null);
+  const workingPointBaselines =
+    !wpSurveyed && workingPoint && workingPoint.easting != null && workingPoint.northing != null && firstRefMark
+      ? [
+          {
+            p: { _id: `wp-${workingPoint._id}`, name: workingPoint.name },
+            o: {
+              reference: firstRefMark.name,
+              dateTime: "",
+              easting: workingPoint.easting,
+              northing: workingPoint.northing,
+              height: workingPoint.height,
+              ...setupSd(workingPoint.name),
+            },
+            isWorkingPoint: true,
+          },
+        ]
+      : [];
+  // Beacon baselines. An already-measured working point (e.g. a WP1 survey point)
+  // is flagged so it also sorts into the setup block, before the beacons.
+  const beaconBaselines = points.flatMap((p) =>
+    (p.observations || []).map((o) => ({ p, o, isWorkingPoint: !!wpName && p.name === wpName }))
+  );
 
-  // GPS Coordinates baselines, grouped by reference station (as Leica does:
-  // all rovers from base 1, then all rovers from base 2…), rovers by name.
-  const baselines = [
-    ...refMarkBaselines,
-    ...points.flatMap((p) => (p.observations || []).map((o) => ({ p, o }))),
-  ];
+  // GPS Coordinates baselines: the setup measurements (reference marks, then the
+  // working point) first, then the beacons grouped by reference station (as Leica
+  // does: all rovers from base 1, then base 2…), rovers by name.
+  const baselines = [...refMarkBaselines, ...workingPointBaselines, ...beaconBaselines];
   const refOrder = [];
   for (const b of baselines) {
     if (!refOrder.includes(b.o.reference)) refOrder.push(b.o.reference);
   }
+  const isSetup = (b) => b.isReferenceMark || b.isWorkingPoint;
   baselines.sort((a, b) => {
+    // Setup measurements always come before the beacons; among them the reference
+    // marks come first, then the working point (measured before the beacons).
+    if (isSetup(a) !== isSetup(b)) return isSetup(a) ? -1 : 1;
+    if (isSetup(a) && isSetup(b)) {
+      if (!!a.isWorkingPoint !== !!b.isWorkingPoint) return a.isWorkingPoint ? 1 : -1;
+      return naturalCmp(a.p.name, b.p.name);
+    }
+    // Beacons: group by reference station, then by rover name.
     const d = refOrder.indexOf(a.o.reference) - refOrder.indexOf(b.o.reference);
     if (d !== 0) return d;
-    // Within the same reference group, reference marks always come first
-    // (surveyed before the beacons), regardless of name.
-    if (!!a.isReferenceMark !== !!b.isReferenceMark) return a.isReferenceMark ? -1 : 1;
     return naturalCmp(a.p.name, b.p.name);
   });
 
@@ -277,7 +313,10 @@ export default function ReportPage({ params }) {
         {/* Height transformation (sub-band) */}
         <Band sub>Height transformation</Band>
         <Fields>
-          <Row label="Number of common points" value={String(job.includeHeight ? (calibrationPoints.length || hx.commonPoints || 0) : 0)} />
+          {/* Height is NOT part of the (2D) transformation, so the height
+              transformation always has 0 common points — independent of whether
+              the survey itself captures height (job.includeHeight). */}
+          <Row label="Number of common points" value={String(hx.commonPoints || 0)} />
           <Row label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
           <Row label="Parameters" value={hx.parameters || "0.00000000  0.00000000  0.0000 m"} mono />
           <Row label="Inclination of height in X" value={hx.inclinationX || "0° 00' 00.00000\""} />
@@ -293,12 +332,12 @@ export default function ReportPage({ params }) {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <Th>System A</Th>
-                <Th>System B</Th>
+                <Th w="6rem">System A</Th>
+                <Th w="6rem">System B</Th>
                 <Th>Point type</Th>
-                <Th>dE [m]</Th>
-                <Th>dN [m]</Th>
-                <Th>dHgt [m]</Th>
+                <Th right>dE [m]</Th>
+                <Th right>dN [m]</Th>
+                <Th right>dHgt [m]</Th>
               </tr>
             </thead>
             <tbody>
@@ -307,9 +346,9 @@ export default function ReportPage({ params }) {
                   <Td>{c.name}</Td>
                   <Td>{c.name}</Td>
                   <Td>{c.pointType || "Position"}</Td>
-                  <Td mono>{c.resEv != null ? `${fmt(c.resEv, 4)} m` : "-"}</Td>
-                  <Td mono>{c.resNv != null ? `${fmt(c.resNv, 4)} m` : "-"}</Td>
-                  <Td mono>{c.resHgtv != null ? `${fmt(c.resHgtv, 4)} m` : "-"}</Td>
+                  <Td right mono>{c.resEv != null ? `${fmt(c.resEv, 4)} m` : "-"}</Td>
+                  <Td right mono>{c.resNv != null ? `${fmt(c.resNv, 4)} m` : "-"}</Td>
+                  <Td right mono>{c.resHgtv != null ? `${fmt(c.resHgtv, 4)} m` : "-"}</Td>
                 </tr>
               ))}
             </tbody>
@@ -553,6 +592,12 @@ function seededRand(seedStr) {
 function genVal(rng, min, max) {
   const sign = rng() < 0.5 ? -1 : 1;
   return Math.round(sign * (min + rng() * (max - min)) * 10000) / 10000;
+}
+
+// A deterministic POSITIVE value in [min, max], rounded to 4 dp — used for Sd /
+// quality figures, which are always positive.
+function genPos(rng, min, max) {
+  return Math.round((min + rng() * (max - min)) * 10000) / 10000;
 }
 
 // Central meridian (°E) of a South African LO / TM zone, parsed from the
