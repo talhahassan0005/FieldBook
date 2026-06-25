@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
+
 import Spinner from "@/components/Spinner";
 import BackButton from "@/components/BackButton";
 import { api } from "@/lib/api";
@@ -27,7 +28,11 @@ export default function ReportPage({ params }) {
   }
 
   useEffect(() => {
-    setGeneratedAt(new Date().toLocaleString());
+    // IMPORTANT: report date/time is built with fmtDateTime24() below — this
+    // returns "DD/MM/YYYY HH:MM:SS" (24-hour, no comma, no AM/PM). Do NOT
+    // replace this with new Date().toLocaleString() / .toString() anywhere,
+    // those produce the wrong "6/25/2026, 10:21:27 PM" style format.
+    setGeneratedAt(fmtDateTime24(new Date()));
     (async () => {
       try {
         const [j, c, s] = await Promise.all([
@@ -81,8 +86,10 @@ export default function ReportPage({ params }) {
   const sum = (arr) => arr.reduce((s, v) => s + v, 0);
   const refE = calibrationPoints.map((c) => c.easting).filter((v) => v != null);
   const refN = calibrationPoints.map((c) => c.northing).filter((v) => v != null);
-  const rotOriginX = tx.rotationOriginX || (refN.length ? sum(refN) / 2 : 0);
-  const rotOriginY = tx.rotationOriginY || (refE.length ? sum(refE) / 2 : 0);
+  // Always coordinates from the reference marks (client: X0 = Σnorthings/2,
+  // Y0 = Σeastings/2) — not the tiny stored rotation-origin offsets.
+  const rotOriginX = refN.length ? sum(refN) / 2 : (tx.rotationOriginX || 0);
+  const rotOriginY = refE.length ? sum(refE) / 2 : (tx.rotationOriginY || 0);
   const jobRng = seededRand(String(job._id || job.name || "fieldbook"));
   const dE = tx.dE || genVal(jobRng, 0.02, 0.3);
   const dN = tx.dN || genVal(jobRng, 0.02, 0.3);
@@ -199,6 +206,7 @@ export default function ReportPage({ params }) {
     return naturalCmp(a.p.name, b.p.name);
   });
 
+  
   // The date under the title is the report generation time (as in the Leica book).
   const reportDate = generatedAt;
 
@@ -213,8 +221,9 @@ export default function ReportPage({ params }) {
       </div>
 
       <div className="print-container mx-auto max-w-4xl bg-white px-12 py-10 text-[12.5px] leading-[1.45] text-black">
-        {/* Report header — centred title + date */}
-        <div className="mb-6">
+        {/* Report header — centred title + date, logo / placeholder box top-right */}
+        <div className="relative mb-6">
+          <ImageWithFallback src={job.logoUrl} />
           <h1 className="text-center text-[22px] font-bold text-black">Fieldbook Report</h1>
           <p className="mt-0.5 text-center text-[12px] text-black">{reportDate}</p>
         </div>
@@ -223,11 +232,7 @@ export default function ReportPage({ params }) {
         <Band>Job Information</Band>
         <Fields>
           <Row label="Job name" value={job.name} />
-          <Row
-            label="Created"
-            value={fmtDateMaybe(job.jobCreated) || (job.createdAt ? new Date(job.createdAt).toLocaleString() : "")}
-          />
-          <Row label="Description" value={job.description} />
+          <Row label="Created" value={fmtCreated(job.jobCreated, job.createdAt)} />
           <Row label="Creator" value={job.creator} />
           <Row label="Time zone" value={job.timezone} />
           <Row label="Coordinate system name" value={job.coordinateSystemName} />
@@ -253,78 +258,103 @@ export default function ReportPage({ params }) {
           <Row label="CSCS model" value={job.cscsModel} />
         </Fields>
 
-        {/* Transformation details (plain heading, no band) */}
-        <Plain>Transformation details</Plain>
+        {/* Transformation details — band spans the full page width like the
+            other section bands (Job Information, Coordinate System Information). */}
+        <Band>Transformation details</Band>
 
         {/* 3D-Helmert transformation (Bursa-Wolf; all-zero when no height) */}
-        <Band sub>3D-Helmert transformation</Band>
-        <Fields>
-          <Row label="Number of common points" value={String(t3.commonPoints ?? 0)} />
-          <Row label="Transformation model" value={t3.model || "Bursa-Wolf"} />
-        </Fields>
-        <table className="mb-3 mt-2 border-collapse">
-          <thead>
-            <tr>
-              <Th w="3rem">No.</Th>
-              <Th w="23rem">Parameter</Th>
-              <Th>Value</Th>
-            </tr>
-          </thead>
-          <tbody>
-            <TransformRow n={1} p="Shift dX" v={`${fmtVal(t3.shiftDX ?? 0)} m`} />
-            <TransformRow n={2} p="Shift dY" v={`${fmtVal(t3.shiftDY ?? 0)} m`} />
-            <TransformRow n={3} p="Shift dZ" v={`${fmtVal(t3.shiftDZ ?? 0)} m`} />
-            <TransformRow n={4} p="Rotation about X" v={t3.rotX || "0.00000\""} />
-            <TransformRow n={5} p="Rotation about Y" v={t3.rotY || "0.00000\""} />
-            <TransformRow n={6} p="Rotation about Z" v={t3.rotZ || "0.00000\""} />
-            <TransformRow n={7} p="Scale" v={`${fmtVal(t3.scalePpm ?? 0)} ppm`} />
-          </tbody>
-        </table>
+        {/* Band stays full page-width like the other section bands; only the
+            content below it (rows/table) is nudged right with a left indent. */}
+        <Band>3D-Helmert transformation</Band>
+        <div className="pl-6">
+          <Fields>
+            <Row label="Number of common points" value={String(t3.commonPoints ?? 0)} />
+            <Row label="Transformation model" value={t3.model || "Bursa-Wolf"} />
+          </Fields>
+          <table className="mb-3 mt-2 border-collapse">
+            <thead>
+              <tr>
+                <Th w="3rem">No.</Th>
+                <Th w="14rem">Parameter</Th>
+                <Th>Value</Th>
+              </tr>
+            </thead>
+            <tbody>
+              <TransformRow n={1} p="Shift dX" v={`${fmtVal(t3.shiftDX ?? 0)} m`} />
+              <TransformRow n={2} p="Shift dY" v={`${fmtVal(t3.shiftDY ?? 0)} m`} />
+              <TransformRow n={3} p="Shift dZ" v={`${fmtVal(t3.shiftDZ ?? 0)} m`} />
+              <TransformRow n={4} p="Rotation about X" v={t3.rotX || "0.00000\""} />
+              <TransformRow n={5} p="Rotation about Y" v={t3.rotY || "0.00000\""} />
+              <TransformRow n={6} p="Rotation about Z" v={t3.rotZ || "0.00000\""} />
+              <TransformRow n={7} p="Scale" v={`${fmtVal(t3.scalePpm ?? 0)} ppm`} />
+            </tbody>
+          </table>
+        </div>
 
-        <Band sub>2D-Helmert transformation</Band>
-        <Fields>
-          {/* Common points = the reference marks used for calibration (from the CSV). */}
-          <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
-          <div className="flex text-[12.5px]">
-            <span className="w-[26rem] shrink-0">Rotation origin:</span>
-            <span className="num">X0: {fmt(rotOriginX)} m</span>
-          </div>
-          <div className="flex text-[12.5px]">
-            <span className="w-[26rem] shrink-0" />
-            <span className="num">Y0: {fmt(rotOriginY)} m</span>
-          </div>
-        </Fields>
-        <table className="mt-2 border-collapse">
-          <thead>
-            <tr>
-              <Th w="3rem">No.</Th>
-              <Th w="23rem">Parameter</Th>
-              <Th>Value</Th>
-            </tr>
-          </thead>
-          <tbody>
-            <TransformRow n={1} p="dE" v={`${fmtVal(dE)} m`} />
-            <TransformRow n={2} p="dN" v={`${fmtVal(dN)} m`} />
-            <TransformRow n={3} p="Rotation" v={tx.rotation || "0° 00' 00.00000\""} />
-            <TransformRow n={4} p="Scale" v={`${fmtVal(scalePpm)} ppm`} />
-          </tbody>
-        </table>
+        <Band>2D-Helmert transformation</Band>
+        <div className="pl-6">
+          <Fields>
+            {/* Common points = the reference marks used for calibration (from the CSV). */}
+            <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
+            <div className="flex text-[12.5px]">
+              <span className="w-[22rem] shrink-0">Rotation origin:</span>
+              <span className="num">X0: {fmt(rotOriginX)} m</span>
+            </div>
+            <div className="flex text-[12.5px]">
+              <span className="w-[22rem] shrink-0" />
+              <span className="num">Y0: {fmt(rotOriginY)} m</span>
+            </div>
+          </Fields>
+          <table className="mt-2 border-collapse">
+            <thead>
+              <tr>
+                <Th w="3rem">No.</Th>
+                <Th w="14rem">Parameter</Th>
+                <Th>Value</Th>
+              </tr>
+            </thead>
+            <tbody>
+              <TransformRow n={1} p="dE" v={`${fmtVal(dE)} m`} />
+              <TransformRow n={2} p="dN" v={`${fmtVal(dN)} m`} />
+              <TransformRow n={3} p="Rotation" v={tx.rotation || "0° 00' 00.00000\""} />
+              <TransformRow n={4} p="Scale" v={`${fmtVal(scalePpm)} ppm`} />
+            </tbody>
+          </table>
+        </div>
 
-        {/* Height transformation (sub-band) */}
-        <Band sub>Height transformation</Band>
-        <Fields>
-          {/* Height is NOT part of the (2D) transformation, so the height
-              transformation always has 0 common points — independent of whether
-              the survey itself captures height (job.includeHeight). */}
-          <Row label="Number of common points" value={String(hx.commonPoints || 0)} />
-          <Row label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
-          <Row label="Parameters" value={hx.parameters || "0.00000000  0.00000000  0.0000 m"} mono />
-          <Row label="Inclination of height in X" value={hx.inclinationX || "0° 00' 00.00000\""} />
-          <Row label="Inclination of height in Y" value={hx.inclinationY || "0° 00' 00.00000\""} />
-        </Fields>
+        {/* Height transformation */}
+        <Band>Height transformation</Band>
+        <div className="pl-6">
+          <Fields>
+            {/* Height is NOT part of the (2D) transformation, so the height
+                transformation always has 0 common points — independent of whether
+                the survey itself captures height (job.includeHeight). */}
+            <Row label="Number of common points" value={String(hx.commonPoints || 0)} />
+            <Row label="Mean transformation accuracy" value={hx.meanAccuracy != null ? `${fmt(hx.meanAccuracy, 4)} m` : "0.0000 m"} mono />
+            {/* Parameters: 3 values (inclination-X, inclination-Y, height offset),
+                each in its own aligned column — matches the other tables' spacing
+                instead of one cramped string. */}
+            {(() => {
+              const parts = (hx.parameters || "0.00000000 0.00000000 0.0000 m").trim().split(/\s+/);
+              const p1 = parts[0] || "0.00000000";
+              const p2 = parts[1] || "0.00000000";
+              const p3 = parts.slice(2).join(" ") || "0.0000 m";
+              return (
+                <div className="grid grid-cols-[22rem_1fr_1fr_1fr] text-[12.5px]">
+                  <span className="text-black">Parameters:</span>
+                  <span className="num">{p1}</span>
+                  <span className="num">{p2}</span>
+                  <span className="num">{p3}</span>
+                </div>
+              );
+            })()}
+            <Row label="Inclination of height in X" value={hx.inclinationX || "0° 00' 00.00000\""} />
+            <Row label="Inclination of height in Y" value={hx.inclinationY || "0° 00' 00.00000\""} />
+          </Fields>
+        </div>
 
-        {/* Residuals (plain heading) */}
-        <Plain>Residuals</Plain>
+        {/* Residuals */}
+        <Band>Residuals</Band>
         <Plain sub>Grid:</Plain>
         {residualRows.length === 0 ? (
           <EmptyNote>No reference marks for calibration residuals.</EmptyNote>
@@ -332,12 +362,12 @@ export default function ReportPage({ params }) {
           <table className="w-full table-fixed border-collapse">
             <thead>
               <tr>
-                <Th w="13%">System A</Th>
-                <Th w="12%">System B</Th>
-                <Th w="18%">Point type</Th>
-                <Th w="19%" right>dE [m]</Th>
-                <Th w="19%" right>dN [m]</Th>
-                <Th w="19%" right>dHgt [m]</Th>
+                <Th w="17%">System A</Th>
+                <Th w="17%">System B</Th>
+                <Th w="12%">Point type</Th>
+                <Th w="18%" right>dE [m]</Th>
+                <Th w="18%" right>dN [m]</Th>
+                <Th w="18%" right>dHgt [m]</Th>
               </tr>
             </thead>
             <tbody>
@@ -345,7 +375,7 @@ export default function ReportPage({ params }) {
                 <tr key={c._id}>
                   <Td>{c.name}</Td>
                   <Td>{c.name}</Td>
-                  <Td>{c.pointType || "Position"}</Td>
+                  <Td>Position</Td>
                   <Td right mono>{c.resEv != null ? `${fmt(c.resEv, 4)} m` : "-"}</Td>
                   <Td right mono>{c.resNv != null ? `${fmt(c.resNv, 4)} m` : "-"}</Td>
                   <Td right mono>{c.resHgtv != null ? `${fmt(c.resHgtv, 4)} m` : "-"}</Td>
@@ -358,7 +388,7 @@ export default function ReportPage({ params }) {
         {/* List of identical points = the reference marks used for calibration.
             System A (WGS-84) only shows when those coords are on file; System B
             (Local Grid) always shows from the reference marks' grid coordinates. */}
-        <Plain>List of identical points</Plain>
+        <Band>List of identical points</Band>
         {calibrationPoints.length === 0 ? (
           <EmptyNote>No reference marks. Mark points as “Reference Mark” when importing the CSV.</EmptyNote>
         ) : (
@@ -370,7 +400,8 @@ export default function ReportPage({ params }) {
                 <table className="mb-2 w-full table-fixed border-collapse">
                   <thead>
                     <tr>
-                      <Th w="43%">Point</Th>
+                      <Th w="43%" />
+
                       <Th w="19%" right>X [m]</Th>
                       <Th w="19%" right>Y [m]</Th>
                       <Th w="19%" right>Z [m]</Th>
@@ -394,7 +425,7 @@ export default function ReportPage({ params }) {
             <table className="w-full table-fixed border-collapse">
               <thead>
                 <tr>
-                  <Th w="43%">Point</Th>
+                  <Th w="43%" />
                   <Th w="19%" right>Easting [m]</Th>
                   <Th w="19%" right>Northing [m]</Th>
                   <Th w="19%" right>Hgt [m]</Th>
@@ -404,8 +435,8 @@ export default function ReportPage({ params }) {
                 {calibrationPoints.map((c) => (
                   <tr key={c._id}>
                     <Td>{c.name}</Td>
-                    <Td right mono>{fmt(c.easting, 4)}</Td>
-                    <Td right mono>{fmt(c.northing, 4)}</Td>
+                    <Td right mono>{fmt2z(c.easting)}</Td>
+                    <Td right mono>{fmt2z(c.northing)}</Td>
                     <Td right mono>{fmt(c.height, 4)}</Td>
                   </tr>
                 ))}
@@ -428,13 +459,13 @@ export default function ReportPage({ params }) {
                 return (
                   <div key={`${p._id}-${i}`}>
                     {/* Baseline band */}
-                    <div className="grid grid-cols-3 gap-2 bg-[#d9d9d9] px-1.5 py-[3px] text-[12px] font-bold text-black">
+                    <div className="grid grid-cols-3 gap-2 bg-[#d9d9d9] px-1.5 py-[1px] text-[12px] font-bold text-black">
                       <span className="whitespace-nowrap">Baseline</span>
                       <span className="whitespace-nowrap">Reference: {o.reference || "—"}</span>
                       <span className="whitespace-nowrap">Rover: {p.name}</span>
                     </div>
                     <div className="pt-1">
-                      <div className="font-bold">Local Coordinates:</div>
+                      <div>Local Coordinates:</div>
                       <CoordLine
                         label="Easting"
                         a={hasRef ? `${fmt(ref.easting, 4)} m` : null}
@@ -446,25 +477,21 @@ export default function ReportPage({ params }) {
                         b={`${fmt(o.northing, 4)} m`}
                       />
                       <CoordLine
-                        label="Ellip. Hgt"
+                        label="Ortho. Hgt"
                         a={hasRef ? fmt(ref.height, 4) : null}
                         b={fmt(o.height, 4)}
                       />
                     </div>
                     {hasQuality && (
-                      <div className="grid grid-cols-[5rem_1fr] pt-1 text-[12px]">
-                        <span className="font-bold">Quality:</span>
-                        <div className="num flex flex-col gap-0.5">
-                          <div className="flex flex-wrap gap-x-4 whitespace-nowrap">
-                            <span>Sd. E: {fmt(o.sdE, 4)} m</span>
-                            <span>Sd. N: {fmt(o.sdN, 4)} m</span>
-                            <span>Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
-                          </div>
-                          <div className="flex flex-wrap gap-x-4 whitespace-nowrap">
-                            <span>Posn. Qlty: {fmt(pq, 4)} m</span>
-                            <span>Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
-                          </div>
-                        </div>
+                      <div className="grid grid-cols-[5rem_1fr_1fr_1fr] pt-1 text-[12px]">
+                        <span>Quality:</span>
+                        <span className="num">Sd. E: {fmt(o.sdE, 4)} m</span>
+                        <span className="num">Sd. N: {fmt(o.sdN, 4)} m</span>
+                        <span className="num">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
+                        <span />
+                        <span className="num">Posn. Qlty: {fmt(pq, 4)} m</span>
+                        <span className="num">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
+                        <span />
                       </div>
                     )}
                     {!hasRef && o.reference && (
@@ -565,6 +592,35 @@ export default function ReportPage({ params }) {
 
 /* ---------- presentational helpers (match Leica Geo Office field book) ---------- */
 
+
+function ImageWithFallback({ src }) {
+  const [error, setError] = useState(false);
+
+  if (!src || error) {
+    return (
+      <div
+        className="absolute right-0 top-0 flex items-center gap-1.5 border border-gray-400 bg-white px-2 py-1.5"
+        style={{ maxWidth: 220, fontSize: 11, lineHeight: 1.3 }}
+      >
+        <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center border border-red-600 bg-white">
+          <span className="text-[9px] font-bold text-red-600">✕</span>
+        </div>
+        <span className="text-gray-700">
+          The linked image cannot be displayed. The file may have been moved, renamed, or deleted. Verify that the link points to the correct file and location.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="absolute right-0 top-0 max-h-16 max-w-[180px] object-contain"
+      onError={() => setError(true)}
+    />
+  );
+}
 function naturalCmp(a = "", b = "") {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
@@ -706,7 +762,7 @@ function Fields({ children }) {
 function Row({ label, value, mono }) {
   return (
     <div className="flex text-[12.5px]">
-      <span className="w-[26rem] shrink-0 text-black">{label}:</span>
+      <span className="w-[22rem] shrink-0 text-black">{label}:</span>
       <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
     </div>
   );
@@ -731,7 +787,7 @@ function EmptyNote({ children }) {
 function Th({ children, right, w }) {
   return (
     <th
-      className={`pr-6 py-[2px] align-bottom text-[12px] font-bold text-black ${right ? "text-right" : "text-left"}`}
+      className={`whitespace-nowrap pr-6 py-[2px] align-bottom text-[12px] font-bold text-black ${right ? "text-right" : "text-left"}`}
       style={w ? { width: w } : undefined}
     >
       {children}
@@ -761,13 +817,32 @@ function fmtVal(v, dp = 4) {
   return Number(v).toFixed(dp);
 }
 
-// If a value is an ISO timestamp, show it as a clean local date-time; else as-is.
-function fmtDateMaybe(v) {
-  if (!v) return "";
-  const s = String(v);
-  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
-    const d = new Date(s);
-    if (!Number.isNaN(d.getTime())) return d.toLocaleString();
+// Format a Date as "DD/MM/YYYY HH:MM:SS" (no comma, 24-hour) — the Leica style.
+function fmtDateTime24(d) {
+  const p = (x) => String(x).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// "Created" value: keep the entered date-time; if a date has no time, append the
+// time from the job's createdAt timestamp; if nothing entered, use createdAt.
+function fmtCreated(value, createdAtIso) {
+  const s = String(value || "").trim();
+  const fallback = createdAtIso ? new Date(createdAtIso) : null;
+  const hasTime = (str) => /\d:\d/.test(str);
+  if (s) {
+    if (hasTime(s)) return s;
+    if (fallback && !Number.isNaN(fallback.getTime())) {
+      const p = (x) => String(x).padStart(2, "0");
+      return `${s} ${p(fallback.getHours())}:${p(fallback.getMinutes())}:${p(fallback.getSeconds())}`;
+    }
+    return s;
   }
-  return s;
+  return fallback && !Number.isNaN(fallback.getTime()) ? fmtDateTime24(fallback) : "";
+}
+
+// Reference-mark grid coordinates: 2 decimal places followed by 2 zeros (the
+// client's required precision for identical-point local-grid coordinates).
+function fmt2z(v) {
+  if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return "-";
+  return Number(v).toFixed(2) + "00";
 }
