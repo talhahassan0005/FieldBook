@@ -14,6 +14,17 @@ export default function ReportPage({ params }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [generatedAt, setGeneratedAt] = useState("");
+  const [printing, setPrinting] = useState(false);
+
+  // Show a brief "Preparing…" state, let React paint it, then open the print
+  // dialog (window.print blocks, so the state must render first).
+  function handlePrint() {
+    setPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setPrinting(false);
+    }, 150);
+  }
 
   useEffect(() => {
     setGeneratedAt(new Date().toLocaleString());
@@ -159,8 +170,8 @@ export default function ReportPage({ params }) {
       {/* Toolbar (hidden on print) */}
       <div className="no-print mb-4 flex items-center justify-between">
         <BackButton label="Back" />
-        <button className="btn-primary" onClick={() => window.print()}>
-          🖨 Print / Save as PDF
+        <button className="btn-primary" onClick={handlePrint} disabled={printing}>
+          {printing ? "Preparing…" : "🖨 Print / Save as PDF"}
         </button>
       </div>
 
@@ -238,12 +249,12 @@ export default function ReportPage({ params }) {
           {/* Common points = the reference marks used for calibration (from the CSV). */}
           <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
           <div className="flex text-[12.5px]">
-            <span className="shrink-0 pr-3">Rotation origin:</span>
-            <span className="num">
-              X0: {fmt(rotOriginX)} m
-              <br />
-              Y0: {fmt(rotOriginY)} m
-            </span>
+            <span className="w-52 shrink-0">Rotation origin:</span>
+            <span className="num">X0: {fmt(rotOriginX)} m</span>
+          </div>
+          <div className="flex text-[12.5px]">
+            <span className="w-52 shrink-0" />
+            <span className="num">Y0: {fmt(rotOriginY)} m</span>
           </div>
         </Fields>
         <table className="mt-2 border-collapse">
@@ -644,13 +655,12 @@ function Fields({ children }) {
   return <div className="mb-2 mt-1">{children}</div>;
 }
 
-// One "Label: value" line. The value follows the label directly (a small gap),
-// rather than snapping to a fixed column — that fixed column made every value
-// left-align at the same x, reading as a vertical "line" down the middle.
+// One "Label:  value" line — the value aligns at a fixed column (tab stop) so the
+// values form a neat aligned column rather than crowding against the labels.
 function Row({ label, value, mono }) {
   return (
     <div className="flex text-[12.5px]">
-      <span className="shrink-0 pr-3 text-black">{label}:</span>
+      <span className="w-52 shrink-0 text-black">{label}:</span>
       <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
     </div>
   );

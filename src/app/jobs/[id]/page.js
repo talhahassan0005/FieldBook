@@ -22,6 +22,7 @@ export default function JobOverviewPage({ params }) {
   const [survey, setSurvey] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +57,7 @@ export default function JobOverviewPage({ params }) {
       danger: true,
     });
     if (!okToDelete) return;
+    setDeleting(true);
     try {
       await api.del(`/api/jobs/${id}`);
       toast.success(`Job "${job.name}" deleted.`);
@@ -63,6 +65,7 @@ export default function JobOverviewPage({ params }) {
       router.refresh();
     } catch (err) {
       toast.error(err.message);
+      setDeleting(false);
     }
   }
 
@@ -98,8 +101,8 @@ export default function JobOverviewPage({ params }) {
           <Link href={`/jobs/${id}/edit`} className="btn-ghost">
             Edit job
           </Link>
-          <button onClick={removeJob} className="btn-ghost text-red-600 hover:bg-red-50">
-            🗑 Delete
+          <button onClick={removeJob} disabled={deleting} className="btn-ghost text-red-600 hover:bg-red-50">
+            {deleting ? "Deleting…" : "🗑 Delete"}
           </button>
         </div>
       </div>
