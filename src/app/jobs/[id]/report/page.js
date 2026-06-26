@@ -442,6 +442,16 @@ export default function ReportPage({ params }) {
                 ))}
               </tbody>
             </table>
+            {/* Warn if any reference mark's stored easting/northing actually carries
+                more than 2 decimal places — fmt2z() above would silently round it,
+                so flag it instead of hiding the precision loss. */}
+            {calibrationPoints.some((c) => exceeds2dp(c.easting) || exceeds2dp(c.northing)) && (
+              <p className="pt-1 text-[11px] italic text-red-600">
+                ⚠ One or more reference marks have easting/northing values with more than
+                2 decimal places — they have been rounded to fit the required 2-decimal
+                (+ 2 zeros) format. Check the source CSV if exact precision matters.
+              </p>
+            )}
           </>
         )}
 
@@ -458,14 +468,14 @@ export default function ReportPage({ params }) {
                 const hasQuality = [o.sdE, o.sdN, o.sdHgt, o.sdSlope, pq].some((v) => v != null);
                 return (
                   <div key={`${p._id}-${i}`}>
-                    {/* Baseline band */}
-                    <div className="grid grid-cols-3 gap-2 bg-[#d9d9d9] px-1.5 py-[1px] text-[12px] font-bold text-black">
+                    {/* Baseline band — kept thin (not too thick a highlight). */}
+                    <div className="grid grid-cols-3 gap-2 bg-[#d9d9d9] px-1.5 py-0 text-[12px] font-bold text-black leading-[1.3]">
                       <span className="whitespace-nowrap">Baseline</span>
                       <span className="whitespace-nowrap">Reference: {o.reference || "—"}</span>
                       <span className="whitespace-nowrap">Rover: {p.name}</span>
                     </div>
                     <div className="pt-1">
-                      <div>Local Coordinates:</div>
+                      <div className="font-normal">Local Coordinates:</div>
                       <CoordLine
                         label="Easting"
                         a={hasRef ? `${fmt(ref.easting, 4)} m` : null}
@@ -483,14 +493,15 @@ export default function ReportPage({ params }) {
                       />
                     </div>
                     {hasQuality && (
-                      <div className="grid grid-cols-[5rem_1fr_1fr_1fr] pt-1 text-[12px]">
-                        <span>Quality:</span>
-                        <span className="num">Sd. E: {fmt(o.sdE, 4)} m</span>
-                        <span className="num">Sd. N: {fmt(o.sdN, 4)} m</span>
-                        <span className="num">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
+                      <div className=" pt-1 text-[12px]">
+                        <span className="font-normal">Quality:</span>
+                        <span className="num pl-6">Sd. E: {fmt(o.sdE, 4)} m</span>
+                        <span className="num pl-24">Sd. N: {fmt(o.sdN, 4)} m</span>
+                        <span className="num pl-48">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
                         <span />
-                        <span className="num">Posn. Qlty: {fmt(pq, 4)} m</span>
-                        <span className="num">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
+                        <br></br>
+                        <span className="num pl-16">Posn. Qlty: {fmt(pq, 4)} m</span>
+                        <span className="num pl-20">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
                         <span />
                       </div>
                     )}
@@ -772,7 +783,7 @@ function Row({ label, value, mono }) {
 function CoordLine({ label, a, b }) {
   return (
     <div className="grid grid-cols-3 text-[12px]">
-      <span>{label}:</span>
+      <span className="pl-3">{label}:</span>
       <span className="num">{a ?? ""}</span>
       <span className="num">{b}</span>
     </div>
@@ -845,4 +856,13 @@ function fmtCreated(value, createdAtIso) {
 function fmt2z(v) {
   if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return "-";
   return Number(v).toFixed(2) + "00";
+}
+
+// True if a value's actual precision is more than 2 decimal places — i.e. it
+// does NOT cleanly fit the client's "2 decimal places + 2 zeros" format (the
+// extra digits would be silently rounded away by fmt2z above).
+function exceeds2dp(v) {
+  if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return false;
+  const n = Number(v);
+  return Math.abs(Math.round(n * 100) - n * 100) > 1e-6;
 }
