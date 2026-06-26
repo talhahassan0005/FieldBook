@@ -245,17 +245,17 @@ export default function ReportPage({ params }) {
         {/* Coordinate system information */}
         <Band>Coordinate System Information</Band>
         <Fields>
-          <Row label="Coordinate system name" value={job.coordinateSystemName} />
-          <Row label="Created" value={job.coordinateSystemCreated} />
-          <Row label="Transformation name" value={job.transformationName} />
-          <Row label="Transformation type" value={job.transformationType} />
-          <Row label="Height mode" value={job.heightMode} />
-          <Row label="Pre-transformation name" value={job.preTransformationName} />
-          <Row label="Residuals" value={job.residualsFormula} />
-          <Row label="Local Ellipsoid" value={job.ellipsoid} />
-          <Row label="Projection" value={job.projection} />
-          <Row label="Geoid model" value={job.geoidModel} />
-          <Row label="CSCS model" value={job.cscsModel} />
+          <Row1 label="Coordinate system name" value={job.coordinateSystemName} />
+          <Row1 label="Created" value={job.coordinateSystemCreated} />
+          <Row1 label="Transformation name" value={job.transformationName} />
+          <Row1 label="Transformation type" value={job.transformationType} />
+          <Row1 label="Height mode" value={job.heightMode} />
+          <Row1 label="Pre-transformation name" value={job.preTransformationName} />
+          <Row1 label="Residuals" value={job.residualsFormula} />
+          <Row1 label="Local Ellipsoid" value={job.ellipsoid} />
+          <Row1 label="Projection" value={job.projection} />
+          <Row1 label="Geoid model" value={job.geoidModel} />
+          <Row1 label="CSCS model" value={job.cscsModel} />
         </Fields>
 
         {/* Transformation details — band spans the full page width like the
@@ -397,23 +397,23 @@ export default function ReportPage({ params }) {
               <>
                 <Plain sub>System A:</Plain>
                 <Plain sub>WGS 84 Cartesian:</Plain>
-                <table className="mb-2 w-full table-fixed border-collapse">
+                <table className="mb-2 w-full table-fixed border-collapse pr-16">
                   <thead>
                     <tr>
-                      <Th w="43%" />
+                      <Th className="w-1/4" />
 
-                      <Th w="19%" right>X [m]</Th>
-                      <Th w="19%" right>Y [m]</Th>
-                      <Th w="19%" right>Z [m]</Th>
+                      <Th className="w-1/4 right pr-16">X [m]</Th>
+                      <Th className="w-1/4 right pr-16">Y [m]</Th>
+                      <Th className="w-1/4 right pr-16">Z [m]</Th>
                     </tr>
                   </thead>
                   <tbody>
                     {identicalRows.map((c) => (
                       <tr key={c._id}>
                         <Td>{c.name}</Td>
-                        <Td right mono>{fmt(c.X, 4)}</Td>
-                        <Td right mono>{fmt(c.Y, 4)}</Td>
-                        <Td right mono>{fmt(c.Z, 4)}</Td>
+                        <Td className="right mono pr-16">{fmt(c.X, 4)}</Td>
+                        <Td className="right mono pr-16">{fmt(c.Y, 4)}</Td>
+                        <Td className="right mono pr-16">{fmt(c.Z, 4)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -422,36 +422,26 @@ export default function ReportPage({ params }) {
             )}
             <Plain sub>System B:</Plain>
             <Plain sub>Local Grid:</Plain>
-            <table className="w-full table-fixed border-collapse">
+            <table className="w-full table-fixed border-collapse pr-16">
               <thead>
                 <tr>
-                  <Th w="43%" />
-                  <Th w="19%" right>Easting [m]</Th>
-                  <Th w="19%" right>Northing [m]</Th>
-                  <Th w="19%" right>Hgt [m]</Th>
+                  <Th className="w-1/4" />
+                  <Th className="w-1/4 right pr-16">Easting [m]</Th>
+                  <Th className="w-1/4 right pr-16">Northing [m]</Th>
+                  <Th className="w-1/4 right pr-16">Hgt [m]</Th>
                 </tr>
               </thead>
               <tbody>
                 {calibrationPoints.map((c) => (
                   <tr key={c._id}>
                     <Td>{c.name}</Td>
-                    <Td right mono>{fmt2z(c.easting)}</Td>
-                    <Td right mono>{fmt2z(c.northing)}</Td>
-                    <Td right mono>{fmt(c.height, 4)}</Td>
+                    <Td className="right mono pr-16">{fmt2z(c.easting)}</Td>
+                    <Td className="right mono pr-16">{fmt2z(c.northing)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.height, 4)}</Td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {/* Warn if any reference mark's stored easting/northing actually carries
-                more than 2 decimal places — fmt2z() above would silently round it,
-                so flag it instead of hiding the precision loss. */}
-            {calibrationPoints.some((c) => exceeds2dp(c.easting) || exceeds2dp(c.northing)) && (
-              <p className="pt-1 text-[11px] italic text-red-600">
-                ⚠ One or more reference marks have easting/northing values with more than
-                2 decimal places — they have been rounded to fit the required 2-decimal
-                (+ 2 zeros) format. Check the source CSV if exact precision matters.
-              </p>
-            )}
           </>
         )}
 
@@ -494,14 +484,14 @@ export default function ReportPage({ params }) {
                     </div>
                     {hasQuality && (
                       <div className=" pt-1 text-[12px]">
-                        <span className="font-normal">Quality:</span>
-                        <span className="num pl-6">Sd. E: {fmt(o.sdE, 4)} m</span>
+                        <span className="font-normal pl-1">Quality:</span>
+                        <span className="num pl-12">Sd. E: {fmt(o.sdE, 4)} m</span>
                         <span className="num pl-24">Sd. N: {fmt(o.sdN, 4)} m</span>
-                        <span className="num pl-48">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
+                        <span className="num pl-16">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
                         <span />
                         <br></br>
-                        <span className="num pl-16">Posn. Qlty: {fmt(pq, 4)} m</span>
-                        <span className="num pl-20">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
+                        <span className="num pl-24">Posn. Qlty: {fmt(pq, 4)} m</span>
+                        <span className="num pl-16">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
                         <span />
                       </div>
                     )}
@@ -534,19 +524,19 @@ export default function ReportPage({ params }) {
                   <Plain>Avg. Local Coordinates</Plain>
                   <div className="mb-2 mt-1">
                     <div className="flex text-[12.5px]">
-                      <span className="w-[18rem] shrink-0 text-black">Easting:</span>
+                      <span className="w-[10rem] shrink-0 text-black">Easting:</span>
                       <span className="text-black num">{`${fmt(c.meanEasting, 4)} m`}</span>
                     </div>
                     <div className="flex text-[12.5px]">
-                      <span className="w-[18rem] shrink-0 text-black">Northing:</span>
+                      <span className="w-[10rem] shrink-0 text-black">Northing:</span>
                       <span className="text-black num">{`${fmt(c.meanNorthing, 4)} m`}</span>
                     </div>
                     <div className="flex text-[12.5px]">
-                      <span className="w-[18rem] shrink-0 text-black">Ortho. Hgt:</span>
+                      <span className="w-[10rem] shrink-0 text-black">Ortho. Hgt:</span>
                       <span className="text-black num">{fmt(c.meanHeight, 4)}</span>
                     </div>
                     <div className="flex text-[12.5px]">
-                      <span className="w-[18rem] shrink-0 text-black">CQ:</span>
+                      <span className="w-[10rem] shrink-0 text-black">CQ:</span>
                       <span className="text-black num">{`${fmt(c.cq, 4)} m`}</span>
                     </div>
                   </div>
@@ -594,20 +584,6 @@ export default function ReportPage({ params }) {
           </div>
         )}
 
-        {/* Summary footer (not in the original — kept for the operator) */}
-        <div className="no-print mt-8 border-t border-slate-300 pt-3 text-[12px]">
-          <span className="font-bold">Summary:</span> {points.length} survey point
-          {points.length === 1 ? "" : "s"}, {control.length} control point
-          {control.length === 1 ? "" : "s"}.{" "}
-          {exceeded.length === 0 ? (
-            <span className="font-bold text-emerald-700">All points within tolerance.</span>
-          ) : (
-            <span className="font-bold text-red-600">
-              {exceeded.length} point{exceeded.length === 1 ? "" : "s"} exceeded the limit:{" "}
-              {exceeded.map((p) => p.name).join(", ")}.
-            </span>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -785,7 +761,17 @@ function Fields({ children }) {
 function Row({ label, value, mono }) {
   return (
     <div className="flex text-[12.5px]">
-      <span className="w-[22rem] shrink-0 text-black">{label}:</span>
+      <span className="w-[25rem] shrink-0 text-black">{label}:</span>
+      <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
+    </div>
+  );
+}
+
+
+function Row1({ label, value, mono }) {
+  return (
+    <div className="flex text-[12.5px]">
+      <span className="w-[20rem] shrink-0 text-black">{label}:</span>
       <span className={`text-black ${mono ? "num" : ""}`}>{value || "-"}</span>
     </div>
   );
@@ -795,7 +781,7 @@ function Row({ label, value, mono }) {
 function CoordLine({ label, a, b }) {
   return (
     <div className="grid grid-cols-3 text-[12px]">
-      <span className="pl-3">{label}:</span>
+      <span className="pl-1">{label}:</span>
       <span className="num">{a ?? ""}</span>
       <span className="num">{b}</span>
     </div>
