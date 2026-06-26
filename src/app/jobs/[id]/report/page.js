@@ -532,12 +532,24 @@ export default function ReportPage({ params }) {
                 <div key={p._id}>
                   <Band>Point {p.name}</Band>
                   <Plain>Avg. Local Coordinates</Plain>
-                  <Fields>
-                    <Row label="Easting" value={`${fmt(c.meanEasting, 4)} m`} mono />
-                    <Row label="Northing" value={`${fmt(c.meanNorthing, 4)} m`} mono />
-                    <Row label="Ortho. Hgt" value={fmt(c.meanHeight, 4)} mono />
-                    <Row label="CQ" value={`${fmt(c.cq, 4)} m`} mono />
-                  </Fields>
+                  <div className="mb-2 mt-1">
+                    <div className="flex text-[12.5px]">
+                      <span className="w-[18rem] shrink-0 text-black">Easting:</span>
+                      <span className="text-black num">{`${fmt(c.meanEasting, 4)} m`}</span>
+                    </div>
+                    <div className="flex text-[12.5px]">
+                      <span className="w-[18rem] shrink-0 text-black">Northing:</span>
+                      <span className="text-black num">{`${fmt(c.meanNorthing, 4)} m`}</span>
+                    </div>
+                    <div className="flex text-[12.5px]">
+                      <span className="w-[18rem] shrink-0 text-black">Ortho. Hgt:</span>
+                      <span className="text-black num">{fmt(c.meanHeight, 4)}</span>
+                    </div>
+                    <div className="flex text-[12.5px]">
+                      <span className="w-[18rem] shrink-0 text-black">CQ:</span>
+                      <span className="text-black num">{`${fmt(c.cq, 4)} m`}</span>
+                    </div>
+                  </div>
                   {isSingle ? (
                     <p className="pt-1 text-[12px] italic text-slate-500">
                       Single observation — no double-polar check available.
