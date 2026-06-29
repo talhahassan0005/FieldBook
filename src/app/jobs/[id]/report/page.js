@@ -478,32 +478,38 @@ export default function ReportPage({ params }) {
                     </div>
                     <div className="pt-1">
                       <div className="font-normal">Local Coordinates:</div>
-                      <CoordLine
-                        label="Easting"
-                        a={hasRef ? `${fmt(ref.easting, 4)} m` : null}
-                        b={`${fmt(o.easting, 4)} m`}
-                      />
-                      <CoordLine
-                        label="Northing"
-                        a={hasRef ? `${fmt(ref.northing, 4)} m` : null}
-                        b={`${fmt(o.northing, 4)} m`}
-                      />
-                      <CoordLine
-                        label="Ortho. Hgt"
-                        a={hasRef ? fmt(ref.height, 4) : null}
-                        b={fmt(o.height, 4)}
-                      />
+                      <div className="pl-4">
+                          <CoordLine
+                            label="Easting"
+                            a={hasRef ? `${fmt(ref.easting, 4)} m` : null}
+                            b={`${fmt(o.easting, 4)} m`}
+                          />
+                          <CoordLine
+                            label="Northing"
+                            a={hasRef ? `${fmt(ref.northing, 4)} m` : null}
+                            b={`${fmt(o.northing, 4)} m`}
+                          />
+                          <CoordLine
+                            label="Ortho. Hgt"
+                            a={hasRef ? fmt(ref.height, 4) : null}
+                            b={fmt(o.height, 4)}
+                          />
+                      </div>
                     </div>
                     {hasQuality && (
                       <div className=" pt-1 text-[12px]">
                         <span className="font-normal pl-1">Quality:</span>
-                        <span className="num pl-12">Sd. E: {fmt(o.sdE, 4)} m</span>
-                        <span className="num pl-24">Sd. N: {fmt(o.sdN, 4)} m</span>
-                        <span className="num pl-16">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
+                        <span className="num pl-8">Sd. E: {fmt(o.sdE, 4)} m</span>
+                        <span className="pl-7">
+                            <span className="num pl-32">Sd. N: {fmt(o.sdN, 4)} m</span>
+                        </span>
+                        <span className="num pl-48">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
                         <span />
                         <br></br>
-                        <span className="num pl-24">Posn. Qlty: {fmt(pq, 4)} m</span>
-                        <span className="num pl-16">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
+                        <div className="pl-4">
+                            <span className="num pl-16">Posn. Qlty: {fmt(pq, 4)} m</span>
+                            <span className="num pl-32">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
+                        </div>
                         <span />
                       </div>
                     )}
