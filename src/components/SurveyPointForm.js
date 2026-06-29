@@ -296,10 +296,21 @@ export default function SurveyPointForm({
             />
           )}
           <Metric label="CQ" value={fmt(preview.cq)} />
+          {preview.timeDiffMinutes !== null && (
+            <Metric
+              label="Time diff"
+              value={fmt(preview.timeDiffMinutes, 0)}
+              bad={preview.timeDiffExceeded}
+              limit={`≥ ${preview.minTimeDiffMinutes}`}
+              unit="min"
+            />
+          )}
         </div>
         {preview.limitExceeded && (
           <p className="mt-3 text-xs font-medium text-red-600">
-            ⚠ The two observations disagree beyond the tolerance — this point should be re-surveyed.
+            {preview.timeDiffExceeded && !preview.positionExceeded && !preview.heightExceeded
+              ? "⚠ The two observations were taken too close together in time — re-survey with a longer gap between them."
+              : "⚠ The two observations disagree beyond the tolerance — this point should be re-surveyed."}
           </p>
         )}
       </div>
@@ -318,14 +329,14 @@ export default function SurveyPointForm({
   );
 }
 
-function Metric({ label, value, bad, limit }) {
+function Metric({ label, value, bad, limit, unit = "m" }) {
   return (
     <div>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
       <div className={`num text-base font-semibold ${bad ? "text-red-600" : "text-slate-800"}`}>
         {value}
       </div>
-      {limit && <div className="text-[10px] text-slate-400">{limit} m</div>}
+      {limit && <div className="text-[10px] text-slate-400">{limit} {unit}</div>}
     </div>
   );
 }

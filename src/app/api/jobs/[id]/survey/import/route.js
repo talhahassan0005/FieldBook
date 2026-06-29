@@ -26,7 +26,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "No points to import" }, { status: 400 });
     }
 
-    const limits = { positionLimit: job.positionLimit, heightLimit: job.heightLimit };
+    const limits = { positionLimit: job.positionLimit, heightLimit: job.heightLimit, minTimeDiffMinutes: job.minTimeDiffMinutes };
     const existing = await SurveyPoint.find({ job: id }).select("name").lean();
     const existingNames = new Set(existing.map((p) => p.name));
 

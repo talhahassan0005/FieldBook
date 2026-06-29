@@ -29,7 +29,7 @@ export async function POST(request, { params }) {
 
     const computed = computeSurveyPoint(
       body.observations || [],
-      { positionLimit: job.positionLimit, heightLimit: job.heightLimit },
+      { positionLimit: job.positionLimit, heightLimit: job.heightLimit, minTimeDiffMinutes: job.minTimeDiffMinutes },
       { cqOverride: body.cqOverride }
     );
 

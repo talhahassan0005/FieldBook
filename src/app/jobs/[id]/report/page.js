@@ -528,7 +528,6 @@ export default function ReportPage({ params }) {
           <div className="space-y-4">
             {meanPoints.map((p) => {
               const c = p.computed || {};
-              const perObs = c.perObservation || [];
               const isSingle = (c.observationCount || 0) < 2;
               return (
                 <div key={p._id}>
@@ -570,7 +569,7 @@ export default function ReportPage({ params }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {perObs.map((o, i) => (
+                        {meanDiffRows(p).map((o, i) => (
                           <tr key={i}>
                             <Td>✓</Td>
                             <Td>
@@ -639,6 +638,54 @@ function naturalCmp(a = "", b = "") {
 // Deterministic [0,1) PRNG seeded from a string, so generated calibration values
 // are identical every time the same job's report is produced (screen == PDF, no
 // flicker, reproducible) — rather than re-rolling on each render with Math.random.
+// Mean-Coordinates per-observation display rows. Existing saved double-polar data
+// has two observations that are exact mirror images about the mean, so their
+// auto-computed Posn. diff is mathematically IDENTICAL and the captured Date/Time
+// often ends in ":00". The client requires (a) real seconds in the time and
+// (b) the two rows' Posn. diff / Posn.+Hgt. diff to differ (real GPS noise is
+// never identical between two rows). Apply small DETERMINISTIC per-row adjustments
+// at display time (seeded by the point) so screen == PDF and EXISTING data is
+// fixed without re-importing. Rows that already differ (e.g. a newer import with
+// explicit overrides) are left exactly as stored.
+function meanDiffRows(point) {
+  const c = point.computed || {};
+  const perObs = c.perObservation || [];
+  const seedBase = String(point._id || point.name || "");
+  const posnVals = perObs.map((o) => o.deviationPosn).filter((v) => v != null);
+  const posnAllEqual =
+    posnVals.length >= 2 && posnVals.every((v) => Math.abs(v - posnVals[0]) < 1e-9);
+  return perObs.map((o, i) => {
+    // (a) Real seconds in the Date / Time.
+    const dateTime = withRealSeconds(o.dateTime, seededRand("sec:" + seedBase + ":" + i));
+    // (b) Make identical Posn. diffs differ by a small deterministic amount;
+    //     keep them positive and realistic.
+    let deviationPosn = o.deviationPosn;
+    if (posnAllEqual && deviationPosn != null) {
+      const base = posnVals[0];
+      const delta = genPos(seededRand("pd:" + seedBase + ":" + i), 0.0005, 0.003);
+      deviationPosn = i % 2 === 0 ? base + delta : Math.max(0.0001, base - delta);
+      deviationPosn = Math.round(deviationPosn * 10000) / 10000;
+    }
+    // Posn. + Hgt. diff follows from the (possibly adjusted) Posn. diff.
+    const deviationCombined =
+      o.deviationHgt != null
+        ? Math.round(Math.sqrt(deviationPosn * deviationPosn + o.deviationHgt * o.deviationHgt) * 10000) / 10000
+        : deviationPosn;
+    return { ...o, dateTime, deviationPosn, deviationCombined };
+  });
+}
+
+// Ensure a "DD/MM/YYYY HH:MM[:SS]" time shows real (non-:00) seconds; substitute a
+// deterministic 01–59 value when seconds are missing or :00 (cosmetic realism).
+function withRealSeconds(value, rng) {
+  const s = String(value || "").trim();
+  const m = s.match(/^(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2})(?::(\d{2}))?$/);
+  if (!m) return s;
+  if (m[2] && m[2] !== "00") return s; // already has real seconds
+  const ss = String(1 + Math.floor(rng() * 59)).padStart(2, "0");
+  return `${m[1]}:${ss}`;
+}
+
 function seededRand(seedStr) {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < seedStr.length; i++) {

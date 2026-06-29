@@ -15,10 +15,29 @@
 export const DEFAULT_POSITION_LIMIT = 0.05; // metres
 export const DEFAULT_HEIGHT_LIMIT = 0.075; // metres
 
+// Minimum time gap required between a point's two double-polar observations.
+// A small plot can be re-observed within a few minutes; a farm (much larger,
+// the machine drifts more between visits) needs roughly an hour between visits.
+export const DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES = 5;
+export const DEFAULT_MIN_TIME_DIFF_FARM_MINUTES = 60;
+
 export function num(v) {
   if (v === "" || v === null || v === undefined) return null;
   const n = typeof v === "number" ? v : parseFloat(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Parse "DD/MM/YYYY[ HH:MM[:SS]]" (or anything Date understands) → Date, else null. */
+function parseObsDateTime(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    const [, dd, mm, yyyy, h = "0", mi = "0", se = "0"] = m;
+    const d = new Date(+yyyy, +mm - 1, +dd, +h, +mi, +se);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /** Horizontal distance between two {easting, northing} points. */
@@ -59,6 +78,7 @@ export function fmt(value, dp = 4) {
 export function computeSurveyPoint(observations = [], limits = {}, options = {}) {
   const positionLimit = num(limits.positionLimit) ?? DEFAULT_POSITION_LIMIT;
   const heightLimit = num(limits.heightLimit) ?? DEFAULT_HEIGHT_LIMIT;
+  const minTimeDiffMinutes = num(limits.minTimeDiffMinutes) ?? DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES;
   // Optional manual override of the coordinate quality (else auto-computed).
   const cqOverride = num(options.cqOverride);
 
@@ -87,14 +107,17 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
     meanHeight: null,
     positionDiff: null, // max horizontal spread between observations
     heightDiff: null, // max vertical spread between observations
+    timeDiffMinutes: null, // max gap between observation date/times
     cq: null, // coordinate quality (std error of the mean, horizontal)
     positionExceeded: false,
     heightExceeded: false,
+    timeDiffExceeded: false,
     limitExceeded: false,
     isDoublePolar: n >= 2,
     perObservation: [],
     positionLimit,
     heightLimit,
+    minTimeDiffMinutes,
   };
 
   if (n === 0) return base;
@@ -128,6 +151,21 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
         if (d > heightDiff) heightDiff = d;
       }
     }
+  }
+
+  // Max pairwise gap between observation date/times (minutes) — double polar
+  // requires the two visits to be genuinely independent, not back-to-back.
+  const obsTimes = obs.map((o) => parseObsDateTime(o.dateTime)).filter(Boolean);
+  let timeDiffMinutes = null;
+  if (obsTimes.length >= 2) {
+    let maxDiffMs = 0;
+    for (let i = 0; i < obsTimes.length; i++) {
+      for (let j = i + 1; j < obsTimes.length; j++) {
+        const d = Math.abs(obsTimes[i] - obsTimes[j]);
+        if (d > maxDiffMs) maxDiffMs = d;
+      }
+    }
+    timeDiffMinutes = maxDiffMs / 60000;
   }
 
   // Per-observation deviation from the mean (for the report table).
@@ -169,6 +207,9 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
 
   const positionExceeded = positionDiff > positionLimit;
   const heightExceeded = heightDiff !== null && heightDiff > heightLimit;
+  // Too SHORT a gap (not too long) is the problem here — the opposite sense
+  // from position/height, where exceeding the limit means too much spread.
+  const timeDiffExceeded = timeDiffMinutes !== null && timeDiffMinutes < minTimeDiffMinutes;
 
   return {
     ...base,
@@ -177,10 +218,12 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
     meanHeight: meanHeight !== null ? round(meanHeight, 4) : null,
     positionDiff: round(positionDiff, 4),
     heightDiff: heightDiff !== null ? round(heightDiff, 4) : null,
+    timeDiffMinutes: timeDiffMinutes !== null ? round(timeDiffMinutes, 2) : null,
     cq: round(cq, 4),
     positionExceeded,
     heightExceeded,
-    limitExceeded: positionExceeded || heightExceeded,
+    timeDiffExceeded,
+    limitExceeded: positionExceeded || heightExceeded || timeDiffExceeded,
     perObservation,
   };
 }

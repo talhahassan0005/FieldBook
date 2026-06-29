@@ -49,15 +49,18 @@ const ComputedSchema = new Schema(
     meanHeight: Number,
     positionDiff: Number,
     heightDiff: Number,
+    timeDiffMinutes: Number,
     cq: Number,
     positionExceeded: Boolean,
     heightExceeded: Boolean,
+    timeDiffExceeded: Boolean,
     limitExceeded: Boolean,
     isDoublePolar: Boolean,
     // Limits in force when this point was computed (so the report stays correct
     // even if the job tolerances are later changed).
     positionLimit: Number,
     heightLimit: Number,
+    minTimeDiffMinutes: Number,
     perObservation: { type: [ObservationDeviationSchema], default: [] },
   },
   { _id: false }

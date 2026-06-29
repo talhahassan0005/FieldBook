@@ -33,9 +33,13 @@ export async function PUT(request, { params }) {
     });
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    // If either double-polar tolerance changed, recompute the cached `computed`
+    // If any double-polar tolerance changed, recompute the cached `computed`
     // for every survey point so their pass/fail flags don't go stale.
-    if (job.positionLimit !== prev.positionLimit || job.heightLimit !== prev.heightLimit) {
+    if (
+      job.positionLimit !== prev.positionLimit ||
+      job.heightLimit !== prev.heightLimit ||
+      job.minTimeDiffMinutes !== prev.minTimeDiffMinutes
+    ) {
       const points = await SurveyPoint.find({ job: id })
         .select("observations cqOverride")
         .lean();
@@ -48,7 +52,11 @@ export async function PUT(request, { params }) {
                 $set: {
                   computed: computeSurveyPoint(
                     p.observations || [],
-                    { positionLimit: job.positionLimit, heightLimit: job.heightLimit },
+                    {
+                      positionLimit: job.positionLimit,
+                      heightLimit: job.heightLimit,
+                      minTimeDiffMinutes: job.minTimeDiffMinutes,
+                    },
                     { cqOverride: p.cqOverride }
                   ),
                 },

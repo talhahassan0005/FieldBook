@@ -23,7 +23,7 @@ export async function PUT(request, { params }) {
 
     existing.computed = computeSurveyPoint(
       existing.observations,
-      { positionLimit: job?.positionLimit, heightLimit: job?.heightLimit },
+      { positionLimit: job?.positionLimit, heightLimit: job?.heightLimit, minTimeDiffMinutes: job?.minTimeDiffMinutes },
       { cqOverride: existing.cqOverride }
     );
 

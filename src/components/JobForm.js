@@ -4,6 +4,7 @@ import { useState, useEffect, useId, isValidElement, cloneElement } from "react"
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES, DEFAULT_MIN_TIME_DIFF_FARM_MINUTES } from "@/lib/survey";
 
 const LO_OPTIONS = ["LO15", "LO17", "LO19", "LO21", "LO23", "LO25", "LO27", "LO29", "LO31", "LO33"];
 
@@ -28,6 +29,8 @@ const EMPTY = {
   cscsModel: "",
   positionLimit: 0.05,
   heightLimit: 0.075,
+  surveyType: "plot",
+  minTimeDiffMinutes: DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
   timezone: "2h 00'",
   applicationSoftware: "LEICA Geo Office 7.0",
   firmwareVersion: "5.60",
@@ -69,6 +72,18 @@ export default function JobForm({ initial, jobId }) {
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  // Plot (small site) vs farm (large site) sets which minimum time gap is
+  // required between a point's two double-polar observations — the surveyor
+  // can still override the minutes field afterwards.
+  function setSurveyType(type) {
+    setForm((f) => ({
+      ...f,
+      surveyType: type,
+      minTimeDiffMinutes:
+        type === "farm" ? DEFAULT_MIN_TIME_DIFF_FARM_MINUTES : DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+    }));
   }
 
   // When a known coordinate system is chosen, auto-fill its calibration fields
@@ -160,6 +175,7 @@ export default function JobForm({ initial, jobId }) {
         ...form,
         positionLimit: parseFloat(form.positionLimit) || 0.05,
         heightLimit: parseFloat(form.heightLimit) || 0.075,
+        minTimeDiffMinutes: parseFloat(form.minTimeDiffMinutes) || DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
         transformation: {
           commonPoints: numOrNull(form.transformation.commonPoints),
           rotationOriginX: numOrNull(form.transformation.rotationOriginX),
@@ -314,6 +330,45 @@ export default function JobForm({ initial, jobId }) {
               <input type="number" step="0.0001" className="input num" value={form.heightLimit} onChange={(e) => set("heightLimit", e.target.value)} />
             </Field>
           )}
+        </div>
+
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <span className="label">Survey type</span>
+          <p className="mb-2 text-[11px] text-slate-400">
+            Plot or farm — sets the minimum time gap required between a point&apos;s two double-polar
+            observations (a small plot can be re-observed within minutes; a farm needs about an hour).
+          </p>
+          <div className="mb-3 flex flex-wrap items-center gap-5 text-sm text-slate-700">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="surveyType"
+                checked={form.surveyType !== "farm"}
+                onChange={() => setSurveyType("plot")}
+              />
+              Plot (small site — minutes apart)
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="surveyType"
+                checked={form.surveyType === "farm"}
+                onChange={() => setSurveyType("farm")}
+              />
+              Farm (large site — ~1 hr apart)
+            </label>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Minimum time difference — between observations (min)">
+              <input
+                type="number"
+                step="1"
+                className="input num"
+                value={form.minTimeDiffMinutes}
+                onChange={(e) => set("minTimeDiffMinutes", e.target.value)}
+              />
+            </Field>
+          </div>
         </div>
       </section>
 

@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
-import { DEFAULT_POSITION_LIMIT, DEFAULT_HEIGHT_LIMIT } from "@/lib/survey";
+import {
+  DEFAULT_POSITION_LIMIT,
+  DEFAULT_HEIGHT_LIMIT,
+  DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+} from "@/lib/survey";
 
 const { Schema } = mongoose;
 
@@ -65,6 +69,11 @@ const JobSchema = new Schema(
     // Double-polar tolerances.
     positionLimit: { type: Number, default: DEFAULT_POSITION_LIMIT },
     heightLimit: { type: Number, default: DEFAULT_HEIGHT_LIMIT },
+
+    // Plot (small site) vs farm (large site) — sets the minimum time gap
+    // required between a point's two double-polar observations.
+    surveyType: { type: String, enum: ["plot", "farm"], default: "plot" },
+    minTimeDiffMinutes: { type: Number, default: DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES },
 
     // Extra equipment metadata.
     timezone: { type: String, default: "" },

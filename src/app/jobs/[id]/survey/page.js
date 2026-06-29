@@ -84,7 +84,9 @@ export default function SurveyPointsPage({ params }) {
     }
   }
 
-  const limits = job ? { positionLimit: job.positionLimit, heightLimit: job.heightLimit } : {};
+  const limits = job
+    ? { positionLimit: job.positionLimit, heightLimit: job.heightLimit, minTimeDiffMinutes: job.minTimeDiffMinutes }
+    : {};
   const includeHeight = !!job?.includeHeight;
 
   return (
