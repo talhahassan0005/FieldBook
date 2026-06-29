@@ -298,7 +298,7 @@ export default function JobForm({ initial, jobId }) {
               value={form.projection}
               onChange={(e) => set("projection", e.target.value)}
               placeholder="LO27 / TM27"
-              disabled={isSavedSystem}
+              disabled={false}
             />
             <datalist id="lo-options">
               {LO_OPTIONS.map((lo) => (
