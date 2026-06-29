@@ -105,6 +105,22 @@ async function run() {
     if (hx.meanAccuracy == null) { set["heightTransformation.meanAccuracy"] = 0; notes.push("meanAccuracy: null → 0"); }
     if (hx.commonPoints == null) { set["heightTransformation.commonPoints"] = 0; notes.push("commonPoints: null → 0"); }
 
+    /* ---- Transformation type / pre-transformation name: junk text ---- */
+    // transformationType should be a real Leica type; lorem-ipsum like
+    // "Duis et voluptatem" is junk → reset to the default "Twostep".
+    const VALID_TYPES = new Set(["Twostep", "Onestep", "Classical", "Classical 3D"]);
+    if (job.transformationType && !VALID_TYPES.has(String(job.transformationType).trim())) {
+      set["transformationType"] = "Twostep";
+      notes.push(`transformationType: "${job.transformationType}" → "Twostep" (junk)`);
+    }
+    // preTransformationName: a fake "Firstname Lastname" person name (faker test
+    // data, e.g. "Knox Patrick") → clear it. A real one looks like a code with
+    // underscores/digits ("DSM_BNGR_To_BTRS") and won't match this pattern.
+    if (job.preTransformationName && /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(String(job.preTransformationName).trim())) {
+      set["preTransformationName"] = "";
+      notes.push(`preTransformationName: "${job.preTransformationName}" → cleared (fake name)`);
+    }
+
     /* ---- 2D-Helmert: clear junk rotation text, backfill null values ---- */
     const tx = job.transformation || {};
     if (isJunkAngle(tx.rotation)) { set["transformation.rotation"] = ""; notes.push(`rotation: "${tx.rotation}" → cleared (junk)`); }

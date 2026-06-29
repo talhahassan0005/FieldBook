@@ -90,13 +90,16 @@ body {
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
-    padding: 0 !important;
+    /* Page margins come from this padding now (not @page) — see below. */
+    padding: 14mm 16mm !important;
     max-width: none !important;
   }
-  /* Per-page margins on every page. (The browser's running header/footer is a
-     print-dialog option — "Headers and footers" — not controllable via CSS.) */
+  /* Remove the browser's running header (date + page title) and footer (URL) on
+     every page: with a ZERO @page margin there's no margin band for the browser
+     to draw them in, so they disappear. The white-space "margin" is restored via
+     the .print-container padding above. */
   @page {
-    margin: 14mm;
+    margin: 0;
   }
   /* Repeat table headers on each page; keep rows from splitting mid-row. */
   thead {

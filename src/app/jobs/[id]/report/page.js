@@ -613,21 +613,28 @@ function ImageWithFallback({ src }) {
   const [error, setError] = useState(false);
 
   if (!src || error) {
+    // Faithful replica of the Microsoft Office "The linked image cannot be
+    // displayed" placeholder (a thin image frame with the red-X broken-image
+    // icon at the top-left and the wrapped grey message beside it) — matches the
+    // original Leica Geo Office field book exactly when no logo is embedded.
     return (
       <div
-        className="absolute right-0 top-0 flex items-center gap-1.5 border border-gray-400 bg-white px-2 py-1.5"
-        style={{ maxWidth: 220, fontSize: 11, lineHeight: 1.3 }}
+        className="absolute right-0 top-0 bg-white"
+        style={{ width: 232, height: 86, border: "1px solid #c9c9c9" }}
       >
-        <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center border border-red-600 bg-white">
-          <span className="text-[9px] font-bold text-red-600">✕</span>
+        <div className="flex items-start" style={{ gap: 6, padding: 6 }}>
+          {/* MS-Office broken-image red-X icon */}
+          <svg width="15" height="15" viewBox="0 0 16 16" className="flex-shrink-0" aria-hidden="true">
+            <rect x="0.5" y="0.5" width="15" height="15" fill="#ffffff" stroke="#d01818" strokeWidth="1" />
+            <path d="M3.2 3.2 L12.8 12.8 M12.8 3.2 L3.2 12.8" stroke="#d01818" strokeWidth="1.4" />
+          </svg>
+          <span style={{ color: "#3b3b3b", fontSize: 11, lineHeight: 1.35 }}>
+            The linked image cannot be displayed. The file may have been moved, renamed, or deleted. Verify that the link points to the correct file and location.
+          </span>
         </div>
-        <span className="text-gray-700">
-          The linked image cannot be displayed. The file may have been moved, renamed, or deleted. Verify that the link points to the correct file and location.
-        </span>
       </div>
     );
   }
-
   return (
     <img
       src={src}

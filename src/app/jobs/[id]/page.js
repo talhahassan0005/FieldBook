@@ -98,6 +98,9 @@ export default function JobOverviewPage({ params }) {
           <Link href={`/jobs/${id}/report`} className="btn-secondary">
             📄 Field Book Report
           </Link>
+          <Link href={`/jobs/${id}/coordinates`} className="btn-secondary">
+            📋 Coordinate List
+          </Link>
           <Link href={`/jobs/${id}/edit`} className="btn-ghost">
             Edit job
           </Link>
