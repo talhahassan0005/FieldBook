@@ -91,8 +91,13 @@ export default function ReportPage({ params }) {
   const rotOriginX = refN.length ? sum(refN) / 2 : (tx.rotationOriginX || 0);
   const rotOriginY = refE.length ? sum(refE) / 2 : (tx.rotationOriginY || 0);
   const jobRng = seededRand(String(job._id || job.name || "fieldbook"));
-  const dE = tx.dE || genVal(jobRng, 0.02, 0.3);
-  const dN = tx.dN || genVal(jobRng, 0.02, 0.3);
+  // dE / dN are a second-step translation — physically small (sub-metre to at most
+  // a few hundred metres). Use a stored value only when it's plausible; ignore a
+  // missing/zero/garbage value (e.g. a leaked multi-kilometre number) and
+  // auto-generate a realistic one instead (client: "dE, dN you can auto generate").
+  const plausibleShift = (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) > 0 && Math.abs(v) <= 1000;
+  const dE = plausibleShift(tx.dE) ? tx.dE : genVal(jobRng, 0.02, 0.3);
+  const dN = plausibleShift(tx.dN) ? tx.dN : genVal(jobRng, 0.02, 0.3);
   const scalePpm = tx.scalePpm || genVal(jobRng, 0.5, 4);
   // One residual row per reference mark (real value if present, else generated).
   const residualRows = calibrationPoints.map((c) => {
@@ -246,7 +251,7 @@ export default function ReportPage({ params }) {
         <Band>Coordinate System Information</Band>
         <Fields>
           <Row1 label="Coordinate system name" value={job.coordinateSystemName} />
-          <Row1 label="Created" value={job.coordinateSystemCreated} />
+          <Row1 label="Created" value={fmtCoordSystemCreated(job.jobCreated, job.createdAt)} />
           <Row1 label="Transformation name" value={job.transformationName} />
           <Row1 label="Transformation type" value={job.transformationType} />
           <Row1 label="Height mode" value={job.heightMode} />
@@ -294,14 +299,21 @@ export default function ReportPage({ params }) {
         <Band>2D-Helmert transformation</Band>
         <div className="pl-6">
           <Fields>
-            {/* Common points = the reference marks used for calibration (from the CSV). */}
-            <Row label="Number of common points" value={String(calibrationPoints.length || tx.commonPoints || 0)} />
+            {/* Common points = the reference marks used for calibration (from the
+                CSV). Label width 17rem so the value lines up with the X0/Y0 and the
+                Value column of the parameter table below (No. 3rem + Parameter 14rem). */}
             <div className="flex text-[12.5px]">
-              <span className="w-[22rem] shrink-0">Rotation origin:</span>
+              <span className="w-[17rem] shrink-0 text-black">Number of common points:</span>
+              <span className="text-black num">{String(calibrationPoints.length || tx.commonPoints || 0)}</span>
+            </div>
+            {/* X0/Y0 align with the Value column of the table below — moved left
+                from 22rem per client ("move a bit to the left"). */}
+            <div className="flex text-[12.5px]">
+              <span className="w-[17rem] shrink-0">Rotation origin:</span>
               <span className="num">X0: {fmt(rotOriginX)} m</span>
             </div>
             <div className="flex text-[12.5px]">
-              <span className="w-[22rem] shrink-0" />
+              <span className="w-[17rem] shrink-0" />
               <span className="num">Y0: {fmt(rotOriginY)} m</span>
             </div>
           </Fields>
@@ -847,6 +859,26 @@ function fmtCreated(value, createdAtIso) {
     return s;
   }
   return fallback && !Number.isNaN(fallback.getTime()) ? fmtDateTime24(fallback) : "";
+}
+
+// Coordinate-system "Created": the client wants the SAME DATE as the project /
+// job creation date, only the TIME differs (the calibration is set up shortly
+// after the job). So take the job's creation date, keep that date exactly, and
+// offset the time by +1h15m (same convention as the New Job form) — stable and
+// always on the project's own date, never a stale unrelated date.
+function fmtCoordSystemCreated(jobCreated, createdAtIso) {
+  const created = fmtCreated(jobCreated, createdAtIso); // "DD/MM/YYYY[ HH:MM:SS]"
+  const m = created.match(/^(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return created;
+  const datePart = m[1];
+  const h = m[2] != null ? +m[2] : 9;
+  const min = m[3] != null ? +m[3] : 0;
+  const sec = m[4] != null ? +m[4] : 0;
+  // Different time, same date: add 1h15m and wrap within the day so the DATE
+  // stays equal to the project's creation date no matter the base time.
+  const total = (h * 60 + min + 75) % (24 * 60);
+  const p = (x) => String(x).padStart(2, "0");
+  return `${datePart} ${p(Math.floor(total / 60))}:${p(total % 60)}:${p(sec)}`;
 }
 
 // Reference-mark grid coordinates: 2 decimal places followed by 2 zeros (the
