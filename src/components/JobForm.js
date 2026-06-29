@@ -52,6 +52,10 @@ export default function JobForm({ initial, jobId }) {
   const [error, setError] = useState("");
   // Reusable coordinate systems (calibration entered once per system, reused).
   const [coordSystems, setCoordSystems] = useState([]);
+  // Job "Created" entered as separate Day/Month/Year Hours/Min/Sec boxes so the
+  // format is always consistent (client requirement); combined into
+  // form.jobCreated as "DD/MM/YYYY HH:MM:SS".
+  const [dt, setDt] = useState(() => parseDateParts(initial?.jobCreated));
 
   useEffect(() => {
     api
@@ -146,6 +150,14 @@ export default function JobForm({ initial, jobId }) {
       return next;
     });
   }
+  // Update one date/time part (digits only, capped length) and rebuild the
+  // combined "DD/MM/YYYY HH:MM:SS" string stored in form.jobCreated.
+  function setDtPart(key, value) {
+    const cleaned = value.replace(/\D/g, "").slice(0, key === "yyyy" ? 4 : 2);
+    const next = { ...dt, [key]: cleaned };
+    setDt(next);
+    setJobCreated(combineDateParts(next));
+  }
   // When a SAVED coordinate system is selected, its calibration is fixed — lock
   // the transformation fields (only projection stays editable). A new/unknown
   // name leaves them editable so the system can be defined once.
@@ -166,6 +178,11 @@ export default function JobForm({ initial, jobId }) {
     e.preventDefault();
     if (!form.name.trim()) {
       setError("Job name is required");
+      return;
+    }
+    const dtErr = dateTimeError(dt);
+    if (dtErr) {
+      setError(dtErr);
       return;
     }
     setSaving(true);
@@ -222,9 +239,25 @@ export default function JobForm({ initial, jobId }) {
           <Field label="Creator / surveyor">
             <input className="input" value={form.creator} onChange={(e) => set("creator", e.target.value)} placeholder="BISM" />
           </Field>
-          <Field label="Job created (date/time)">
-            <input className="input" value={form.jobCreated} onChange={(e) => setJobCreated(e.target.value)} placeholder="10/06/2022 07:54:48" />
-          </Field>
+          <div className="sm:col-span-2">
+            <label className="label">Job created (date / time) *</label>
+            <div className="flex flex-wrap items-end gap-1.5">
+              <DtBox label="DD" value={dt.dd} onChange={(v) => setDtPart("dd", v)} max={2} w="w-12" ph="29" />
+              <span className="pb-2 text-slate-400">/</span>
+              <DtBox label="MM" value={dt.mm} onChange={(v) => setDtPart("mm", v)} max={2} w="w-12" ph="06" />
+              <span className="pb-2 text-slate-400">/</span>
+              <DtBox label="YYYY" value={dt.yyyy} onChange={(v) => setDtPart("yyyy", v)} max={4} w="w-16" ph="2026" />
+              <span className="px-2" />
+              <DtBox label="Hrs" value={dt.hh} onChange={(v) => setDtPart("hh", v)} max={2} w="w-12" ph="16" />
+              <span className="pb-2 text-slate-400">:</span>
+              <DtBox label="Min" value={dt.mi} onChange={(v) => setDtPart("mi", v)} max={2} w="w-12" ph="28" />
+              <span className="pb-2 text-slate-400">:</span>
+              <DtBox label="Sec" value={dt.ss} onChange={(v) => setDtPart("ss", v)} max={2} w="w-12" ph="04" />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour). All boxes are required.
+            </p>
+          </div>
           <Field label="Description" full>
             <input className="input" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="CAD / cadastral survey" />
           </Field>
@@ -422,4 +455,48 @@ function parseDateTime(s) {
 function fmtDateTime(d) {
   const p = (x) => String(x).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// Split a stored "DD/MM/YYYY HH:MM:SS" string into the six editable parts.
+function parseDateParts(s) {
+  const m = String(s || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return { dd: "", mm: "", yyyy: "", hh: "", mi: "", ss: "" };
+  return { dd: m[1], mm: m[2], yyyy: m[3], hh: m[4] || "", mi: m[5] || "", ss: m[6] || "" };
+}
+
+// Combine the six parts into "DD/MM/YYYY HH:MM:SS" — empty until all are filled.
+function combineDateParts({ dd, mm, yyyy, hh, mi, ss }) {
+  if ([dd, mm, yyyy, hh, mi, ss].some((v) => v === "" || v == null)) return "";
+  const p2 = (x) => String(x).padStart(2, "0");
+  return `${p2(dd)}/${p2(mm)}/${yyyy} ${p2(hh)}:${p2(mi)}:${p2(ss)}`;
+}
+
+// Validate the date/time boxes — returns an error message, or "" when valid.
+function dateTimeError({ dd, mm, yyyy, hh, mi, ss }) {
+  if ([dd, mm, yyyy, hh, mi, ss].some((v) => v === "" || v == null))
+    return "Job created date & time is required — fill DD, MM, YYYY, Hrs, Min and Sec.";
+  if (yyyy.length !== 4 || +yyyy < 1900 || +yyyy > 2999) return "Enter a 4-digit year.";
+  if (+mm < 1 || +mm > 12) return "Month must be between 01 and 12.";
+  if (+dd < 1 || +dd > 31) return "Day must be between 01 and 31.";
+  if (+hh > 23) return "Hours must be between 00 and 23.";
+  if (+mi > 59) return "Minutes must be between 00 and 59.";
+  if (+ss > 59) return "Seconds must be between 00 and 59.";
+  return "";
+}
+
+// One small numeric box (Day / Month / Year / Hrs / Min / Sec) with its label.
+function DtBox({ label, value, onChange, max, w, ph }) {
+  return (
+    <div className={`flex flex-col ${w}`}>
+      <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+      <input
+        className="input num text-center !px-2"
+        inputMode="numeric"
+        value={value}
+        maxLength={max}
+        placeholder={ph}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
 }

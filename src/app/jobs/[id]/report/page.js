@@ -620,7 +620,7 @@ function ImageWithFallback({ src }) {
     return (
       <div
         className="absolute right-0 top-0 bg-white"
-        style={{ width: 232, height: 86, border: "1px solid #c9c9c9" }}
+        style={{ width: 232, height: 86 }}
       >
         <div className="flex items-start" style={{ gap: 6, padding: 6 }}>
           {/* MS-Office broken-image red-X icon */}
@@ -628,7 +628,7 @@ function ImageWithFallback({ src }) {
             <rect x="0.5" y="0.5" width="15" height="15" fill="#ffffff" stroke="#d01818" strokeWidth="1" />
             <path d="M3.2 3.2 L12.8 12.8 M12.8 3.2 L3.2 12.8" stroke="#d01818" strokeWidth="1.4" />
           </svg>
-          <span style={{ color: "#3b3b3b", fontSize: 11, lineHeight: 1.35 }}>
+          <span style={{ color: "#3b3b3b", fontSize: 8, lineHeight: 1.35 }}>
             The linked image cannot be displayed. The file may have been moved, renamed, or deleted. Verify that the link points to the correct file and location.
           </span>
         </div>

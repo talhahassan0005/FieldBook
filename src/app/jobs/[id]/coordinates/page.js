@@ -58,13 +58,19 @@ export default function CoordinateListPage({ params }) {
     );
   if (!job) return null;
 
+  // Description is standardised by point type (client rule):
+  //   • Reference marks      → "12 mm iron peg in concrete"
+  //   • Beacons & working pts → "12 mm iron peg"
+  const PEG = "12 mm iron peg";
+  const PEG_CONCRETE = "12 mm iron peg in concrete";
+
   // One coordinate row from a control point (own grid coords) or a survey point
-  // (final averaged mean coordinate). Description = the point's feature code.
-  const toRow = (p) => ({
+  // (final averaged mean coordinate), with the type-based default description.
+  const toRow = (p, description) => ({
     name: p.name,
     easting: p.computed?.meanEasting ?? p.easting ?? p.observations?.[0]?.easting ?? null,
     northing: p.computed?.meanNorthing ?? p.northing ?? p.observations?.[0]?.northing ?? null,
-    description: p.code || "",
+    description,
   });
   const byName = (a, b) => naturalCmp(a.name, b.name);
   const refMarks = control.filter((c) => c.pointType === "Reference Mark").sort(byName);
@@ -74,25 +80,38 @@ export default function CoordinateListPage({ params }) {
     .sort(byName);
   const beacons = [...points].sort(byName);
 
+  // Match the client's sample sequence exactly: only TWO headers —
+  // "REFERENCE MARKS" (reference marks, then a blank line, then the working
+  // points, then any other control) and "BEACONS". A `SPACER` marks the blank
+  // separator row the sample shows between the reference marks and the WPs.
+  const SPACER = { spacer: true };
+  const refSection = [];
+  for (const c of refMarks) refSection.push(toRow(c, PEG_CONCRETE));
+  if (refSection.length && workingPts.length) refSection.push(SPACER);
+  for (const c of workingPts) refSection.push(toRow(c, PEG));
+  if (refSection.length && otherCtrl.length) refSection.push(SPACER);
+  for (const c of otherCtrl) refSection.push(toRow(c, PEG));
+
   const groups = [
-    ["REFERENCE MARKS", refMarks.map(toRow)],
-    ["WORKING POINTS", workingPts.map(toRow)],
-    ["CONTROL POINTS", otherCtrl.map(toRow)],
-    ["BEACONS", beacons.map(toRow)],
+    ["REFERENCE MARKS", refSection],
+    ["BEACONS", beacons.map((c) => toRow(c, PEG))],
   ].filter(([, rows]) => rows.length > 0);
 
   const title = `COORDINATE LIST ${job.name || ""}`.trim();
 
   // Build & download a real Excel (.xlsx) file matching the client's sample:
-  // a title row, then each group (Reference Marks / Working Points / Beacons)
-  // with a "Description" header, the data rows, and a blank spacer row.
+  // a title row, then each section (REFERENCE MARKS — incl. working points — then
+  // BEACONS) with a "Description" header, the data rows, and blank spacer rows.
   async function downloadExcel() {
     const XLSX = await import("xlsx");
     const round2 = (v) => (v == null || !Number.isFinite(Number(v)) ? "" : Math.round(Number(v) * 100) / 100);
     const aoa = [[title], []];
     for (const [label, rows] of groups) {
       aoa.push([label, "", "", "Description"]);
-      for (const r of rows) aoa.push([r.name, round2(r.easting), round2(r.northing), r.description]);
+      for (const r of rows) {
+        if (r.spacer) aoa.push([]); // blank separator row (e.g. between ref marks and WPs)
+        else aoa.push([r.name, round2(r.easting), round2(r.northing), r.description]);
+      }
       aoa.push([]);
     }
     const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -136,14 +155,20 @@ export default function CoordinateListPage({ params }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i}>
-                      <td className="whitespace-nowrap py-0.5 pr-3">{r.name}</td>
-                      <td className="num py-0.5 pr-3 text-right">{fmtNum(r.easting)}</td>
-                      <td className="num py-0.5 pr-3 text-right">{fmtNum(r.northing)}</td>
-                      <td className="py-0.5">{r.description || "-"}</td>
-                    </tr>
-                  ))}
+                  {rows.map((r, i) =>
+                    r.spacer ? (
+                      <tr key={i}>
+                        <td className="py-2" colSpan={4} />
+                      </tr>
+                    ) : (
+                      <tr key={i}>
+                        <td className="whitespace-nowrap py-0.5 pr-3">{r.name}</td>
+                        <td className="num py-0.5 pr-3 text-right">{fmtNum(r.easting)}</td>
+                        <td className="num py-0.5 pr-3 text-right">{fmtNum(r.northing)}</td>
+                        <td className="py-0.5">{r.description || "-"}</td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
               </table>
             </div>
