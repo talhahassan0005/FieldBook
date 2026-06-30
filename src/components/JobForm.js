@@ -31,6 +31,7 @@ const EMPTY = {
   heightLimit: 0.075,
   surveyType: "plot",
   minTimeDiffMinutes: DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+  coordDecimals: 4,
   timezone: "2h 00'",
   applicationSoftware: "LEICA Geo Office 7.0",
   firmwareVersion: "5.60",
@@ -193,6 +194,7 @@ export default function JobForm({ initial, jobId }) {
         positionLimit: parseFloat(form.positionLimit) || 0.05,
         heightLimit: parseFloat(form.heightLimit) || 0.075,
         minTimeDiffMinutes: parseFloat(form.minTimeDiffMinutes) || DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+        coordDecimals: form.coordDecimals === 3 ? 3 : 4,
         transformation: {
           commonPoints: numOrNull(form.transformation.commonPoints),
           rotationOriginX: numOrNull(form.transformation.rotationOriginX),
@@ -363,6 +365,33 @@ export default function JobForm({ initial, jobId }) {
               <input type="number" step="0.0001" className="input num" value={form.heightLimit} onChange={(e) => set("heightLimit", e.target.value)} />
             </Field>
           )}
+        </div>
+
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <span className="label">Coordinates decimal places (field book report)</span>
+          <p className="mb-2 text-[11px] text-slate-400">
+            How many decimal places Easting/Northing/Height/CQ are shown to in the printed report.
+          </p>
+          <div className="flex items-center gap-5 text-sm text-slate-700">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="coordDecimals"
+                checked={form.coordDecimals !== 3}
+                onChange={() => set("coordDecimals", 4)}
+              />
+              4 decimal places
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="coordDecimals"
+                checked={form.coordDecimals === 3}
+                onChange={() => set("coordDecimals", 3)}
+              />
+              3 decimal places
+            </label>
+          </div>
         </div>
 
         <div className="mt-4 border-t border-slate-100 pt-4">

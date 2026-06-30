@@ -27,8 +27,9 @@ export async function POST(request, { params }) {
     }
 
     const limits = { positionLimit: job.positionLimit, heightLimit: job.heightLimit, minTimeDiffMinutes: job.minTimeDiffMinutes };
-    const existing = await SurveyPoint.find({ job: id }).select("name").lean();
+    const existing = await SurveyPoint.find({ job: id }).select("name sortOrder").lean();
     const existingNames = new Set(existing.map((p) => p.name));
+    let nextSortOrder = existing.reduce((max, p) => Math.max(max, p.sortOrder ?? -1), -1) + 1;
 
     let created = 0;
     let updated = 0;
@@ -56,6 +57,9 @@ export async function POST(request, { params }) {
           code: p.code || "",
           observations: p.observations || [],
           computed,
+          // Preserves the order points appear in the CSV — NOT alphabetical
+          // (so "1, 2, 3, ..., 10, 11" stays in that order, never "1, 10, 11, 2").
+          sortOrder: nextSortOrder++,
         });
         existingNames.add(name);
         created++;

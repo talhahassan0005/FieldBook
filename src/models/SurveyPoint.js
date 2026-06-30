@@ -71,6 +71,10 @@ const SurveyPointSchema = new Schema(
     job: { type: Schema.Types.ObjectId, ref: "Job", required: true, index: true },
     name: { type: String, required: true, trim: true }, // e.g. "M1"
     code: { type: String, default: "" }, // feature code (beacon, corner, ...)
+    // Preserves the exact order points appeared in the imported CSV (or were
+    // added manually) so the report always lists points in that order — never
+    // alphabetically (which would wrongly put "10", "11" before "2").
+    sortOrder: { type: Number, default: 0, index: true },
     cqOverride: { type: Number, default: null }, // optional manual CQ override
     observations: { type: [ObservationSchema], default: [] },
     computed: { type: ComputedSchema, default: {} },

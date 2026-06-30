@@ -87,10 +87,26 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
       const { rows, errors } = parsePastedRows(singleText, columns);
       // Group by point name: a repeated name = the SAME point measured more than
       // once = double polar. Order preserved (Map keeps insertion order).
+      // EXCEPTION: an exact duplicate row (same name, same Easting/Northing) is
+      // an accidental copy-paste in the source CSV, not a real second
+      // observation — keep only the first occurrence, and flag it so the
+      // surveyor knows the CSV has a repeated line (client's CSV had point
+      // "20" listed twice, which produced a broken "Polar 1/Polar 2" entry
+      // with no date/time instead of the normal synthesized double-polar pair).
       const groups = new Map();
       for (const row of rows) {
         if (!groups.has(row.name)) groups.set(row.name, []);
-        groups.get(row.name).push(row);
+        const groupRows = groups.get(row.name);
+        const isExactDuplicate = groupRows.some(
+          (r) => r.easting === row.easting && r.northing === row.northing
+        );
+        if (isExactDuplicate) {
+          errors.push(
+            `Point "${row.name}": duplicate row in the CSV (same Easting/Northing) — the repeated line was ignored.`
+          );
+          continue;
+        }
+        groupRows.push(row);
       }
       const points = [];
       for (const [name, groupRows] of groups) points.push(toPoint(name, groupRows));
@@ -161,12 +177,21 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
   // The mean of the two observations equals the original CSV coordinate exactly.
   // Reference names come from the Working Point / Reference Mark if set, else "Polar 1" / "Polar 2".
   function buildSurveyPayload() {
-    const base = new Date();
-    base.setSeconds(0, 0);
+    // Auto-generated observation timestamps must always fall within working
+    // hours (06:00–18:00) — never wrap into the evening/night. Anchor to
+    // today's date at 00:00, then place every offset inside a 12-hour window
+    // starting at 06:00; once a "day" of working hours is filled, continue
+    // into 06:00 the next day rather than spilling past 18:00.
+    const WORK_START_MIN = 6 * 60; // 06:00
+    const WORK_SPAN_MIN = 12 * 60; // 06:00–18:00
+    const anchor = new Date();
+    anchor.setHours(0, 0, 0, 0);
     const n = surveyPreview.length;
     const p2 = (x) => String(x).padStart(2, "0");
     const at = (mins) => {
-      const d = new Date(base.getTime() + mins * 60000);
+      const dayOffset = Math.floor(mins / WORK_SPAN_MIN);
+      const minuteOfDay = WORK_START_MIN + (mins % WORK_SPAN_MIN);
+      const d = new Date(anchor.getTime() + dayOffset * 86400000 + minuteOfDay * 60000);
       return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
     };
     const r4 = (v) => Math.round(v * 10000) / 10000;

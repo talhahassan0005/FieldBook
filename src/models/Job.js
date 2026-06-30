@@ -24,10 +24,10 @@ const JobSchema = new Schema(
     coordinateSystemCreated: { type: String, default: "" },
     transformationName: { type: String, default: "" },
     transformationType: { type: String, default: "" },
-    heightMode: { type: String, default: "" },
+    heightMode: { type: String, default: "Plane" },
     preTransformationName: { type: String, default: "" },
-    residualsFormula: { type: String, default: "" }, // e.g. 1 / ( distance^2 )
-    ellipsoid: { type: String, default: "" },
+    residualsFormula: { type: String, default: "1 / ( distance^2 )" },
+    ellipsoid: { type: String, default: "Clarke 1880 (Arc)" },
     projection: { type: String, default: "" }, // LO / TM zone
     geoidModel: { type: String, default: "" },
     cscsModel: { type: String, default: "" },
@@ -76,10 +76,14 @@ const JobSchema = new Schema(
     minTimeDiffMinutes: { type: Number, default: DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES },
 
     // Extra equipment metadata.
-    timezone: { type: String, default: "" },
-    applicationSoftware: { type: String, default: "" },
-    firmwareVersion: { type: String, default: "" },
-    codelistName: { type: String, default: "" },
+    timezone: { type: String, default: "2h 00'" },
+    applicationSoftware: { type: String, default: "LEICA Geo Office 7.0" },
+    firmwareVersion: { type: String, default: "5.60" },
+    codelistName: { type: String, default: "THEBE" },
+
+    // How many decimal places coordinates are shown to in the field book report
+    // (client wants the choice between 3 and 4 d.p.).
+    coordDecimals: { type: Number, enum: [3, 4], default: 4 },
   },
   { timestamps: true }
 );

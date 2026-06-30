@@ -7,7 +7,7 @@ export async function GET(request, { params }) {
   try {
     const { id } = await params;
     await dbConnect();
-    const points = await ControlPoint.find({ job: id }).sort({ name: 1 }).lean();
+    const points = await ControlPoint.find({ job: id }).sort({ sortOrder: 1, _id: 1 }).lean();
     return NextResponse.json(points);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -25,7 +25,9 @@ export async function POST(request, { params }) {
     if (!body.name || !body.name.trim()) {
       return NextResponse.json({ error: "Point name is required" }, { status: 400 });
     }
-    const point = await ControlPoint.create({ ...body, job: id });
+    const last = await ControlPoint.findOne({ job: id }).sort({ sortOrder: -1 }).select("sortOrder").lean();
+    const nextSortOrder = (last?.sortOrder ?? -1) + 1;
+    const point = await ControlPoint.create({ ...body, job: id, sortOrder: nextSortOrder });
     return NextResponse.json(point, { status: 201 });
   } catch (err) {
     if (err.code === 11000) {

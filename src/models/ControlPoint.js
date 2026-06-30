@@ -13,6 +13,10 @@ const ControlPointSchema = new Schema(
     name: { type: String, required: true, trim: true },
     code: { type: String, default: "" }, // feature code from the field CSV (e.g. IPC12)
     pointType: { type: String, default: "Position" }, // Position / Height / Control
+    // Preserves the exact order points appeared in the imported CSV (or were
+    // added manually) so the report always lists points in that order — never
+    // alphabetically (which would wrongly put "10", "11" before "2").
+    sortOrder: { type: Number, default: 0, index: true },
 
     // Local grid coordinates (used as the baseline reference).
     easting: { type: Number, default: null },

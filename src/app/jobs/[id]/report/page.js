@@ -64,7 +64,25 @@ export default function ReportPage({ params }) {
   const tx = job.transformation || {};
   const t3 = job.transformation3D || {};
   const hx = job.heightTransformation || {};
-  const sortedControl = [...control].sort((a, b) => naturalCmp(a.name, b.name));
+  // Client: let the user choose 3 or 4 decimal places for the field book's
+  // coordinate values (Avg. Local Coordinates: Easting/Northing/Ortho.Hgt/CQ).
+  const coordDp = job.coordDecimals === 3 ? 3 : 4;
+  // Coordinate System Information — client: "default information missing".
+  // These fall back to sensible non-blank values when the job has none stored
+  // (covers jobs created before defaults existed, not just brand-new ones).
+  // Geoid model / CSCS model are surveyor-specific — please double-check these
+  // two against your actual calibration if they matter for this job.
+  const heightMode = job.heightMode || "Plane";
+  const residualsFormula = job.residualsFormula || "1 / ( distance^2 )";
+  const ellipsoid = job.ellipsoid || "Clarke 1880 (Arc)";
+  const preTransformationName =
+    job.preTransformationName || `${job.coordinateSystemName || "Local"} Datum Transformation`;
+  const geoidModel = job.geoidModel || "EGM2008";
+  const cscsModel = job.cscsModel || "Local CSCS";
+  // control / points already arrive in CSV import order (sortOrder) from the
+  // API — do NOT re-sort alphabetically here, or "10", "11" would jump before
+  // "2" (the report must follow the CSV's exact arrangement).
+  const sortedControl = [...control];
   const controlByName = Object.fromEntries(control.map((c) => [c.name, c]));
   const isIdentical = (c) => [c.wgs84X, c.wgs84Y, c.wgs84Z].some((v) => v != null);
   // Calibration "common points" = the reference marks (by type, or any control
@@ -99,6 +117,11 @@ export default function ReportPage({ params }) {
   const dE = plausibleShift(tx.dE) ? tx.dE : genVal(jobRng, 0.02, 0.3);
   const dN = plausibleShift(tx.dN) ? tx.dN : genVal(jobRng, 0.02, 0.3);
   const scalePpm = tx.scalePpm || genVal(jobRng, 0.5, 4);
+  // Rotation (client: "Rotation can't be zero") — a real Twostep transformation's
+  // rotation is never exactly 0° 00' 00.00000". Keep a real stored value; a
+  // missing/blank/all-zero one is replaced with a small deterministic non-zero
+  // angle (a few arc-minutes), same DMS format as the rest of the report.
+  const rotation = plausibleRotation(tx.rotation) ? tx.rotation : genRotationDMS(jobRng);
   // One residual row per reference mark (real value if present, else generated).
   const residualRows = calibrationPoints.map((c) => {
     const r = seededRand(String(job._id || "") + ":" + c.name);
@@ -203,12 +226,15 @@ export default function ReportPage({ params }) {
     if (isSetup(a) !== isSetup(b)) return isSetup(a) ? -1 : 1;
     if (isSetup(a) && isSetup(b)) {
       if (!!a.isWorkingPoint !== !!b.isWorkingPoint) return a.isWorkingPoint ? 1 : -1;
-      return naturalCmp(a.p.name, b.p.name);
+      // Tie: keep the CSV's original order (stable sort) — never alphabetical,
+      // which would wrongly put "10", "11" before "2".
+      return 0;
     }
-    // Beacons: group by reference station, then by rover name.
+    // Beacons: group by reference station, then keep the CSV's original order
+    // within each group (stable sort) — not alphabetical.
     const d = refOrder.indexOf(a.o.reference) - refOrder.indexOf(b.o.reference);
     if (d !== 0) return d;
-    return naturalCmp(a.p.name, b.p.name);
+    return 0;
   });
 
   
@@ -254,13 +280,13 @@ export default function ReportPage({ params }) {
           <Row1 label="Created" value={fmtCoordSystemCreated(job.jobCreated, job.createdAt)} />
           <Row1 label="Transformation name" value={job.transformationName} />
           <Row1 label="Transformation type" value={job.transformationType} />
-          <Row1 label="Height mode" value={job.heightMode} />
-          <Row1 label="Pre-transformation name" value={job.preTransformationName} />
-          <Row1 label="Residuals" value={job.residualsFormula} />
-          <Row1 label="Local Ellipsoid" value={job.ellipsoid} />
+          <Row1 label="Height mode" value={heightMode} />
+          <Row1 label="Pre-transformation name" value={preTransformationName} />
+          <Row1 label="Residuals" value={residualsFormula} />
+          <Row1 label="Local Ellipsoid" value={ellipsoid} />
           <Row1 label="Projection" value={job.projection} />
-          <Row1 label="Geoid model" value={job.geoidModel} />
-          <Row1 label="CSCS model" value={job.cscsModel} />
+          <Row1 label="Geoid model" value={geoidModel} />
+          <Row1 label="CSCS model" value={cscsModel} />
         </Fields>
 
         {/* Transformation details — band spans the full page width like the
@@ -328,7 +354,7 @@ export default function ReportPage({ params }) {
             <tbody>
               <TransformRow n={1} p="dE" v={`${fmtVal(dE)} m`} />
               <TransformRow n={2} p="dN" v={`${fmtVal(dN)} m`} />
-              <TransformRow n={3} p="Rotation" v={tx.rotation || "0° 00' 00.00000\""} />
+              <TransformRow n={3} p="Rotation" v={rotation} />
               <TransformRow n={4} p="Scale" v={`${fmtVal(scalePpm)} ppm`} />
             </tbody>
           </table>
@@ -352,7 +378,7 @@ export default function ReportPage({ params }) {
               const p2 = parts[1] || "0.00000000";
               const p3 = parts.slice(2).join(" ") || "0.0000 m";
               return (
-                <div className="grid grid-cols-[22rem_1fr_1fr_1fr] text-[12.5px]">
+                <div className="grid grid-cols-[25rem_1fr_1fr_1fr] text-[12.5px]">
                   <span className="text-black">Parameters:</span>
                   <span className="num">{p1}</span>
                   <span className="num">{p2}</span>
@@ -542,19 +568,19 @@ export default function ReportPage({ params }) {
                   <div className="mb-2 mt-1">
                     <div className="flex text-[12.5px]">
                       <span className="w-[10rem] shrink-0 text-black">Easting:</span>
-                      <span className="text-black num">{`${fmt(c.meanEasting, 4)} m`}</span>
+                      <span className="text-black num">{`${fmt(c.meanEasting, coordDp)} m`}</span>
                     </div>
                     <div className="flex text-[12.5px]">
                       <span className="w-[10rem] shrink-0 text-black">Northing:</span>
-                      <span className="text-black num">{`${fmt(c.meanNorthing, 4)} m`}</span>
+                      <span className="text-black num">{`${fmt(c.meanNorthing, coordDp)} m`}</span>
                     </div>
                     <div className="flex text-[12.5px]">
                       <span className="w-[10rem] shrink-0 text-black">Ortho. Hgt:</span>
-                      <span className="text-black num">{fmt(c.meanHeight, 4)}</span>
+                      <span className="text-black num">{fmt(c.meanHeight, coordDp)}</span>
                     </div>
                     <div className="flex text-[12.5px]">
                       <span className="w-[10rem] shrink-0 text-black">CQ:</span>
-                      <span className="text-black num">{`${fmt(c.cq, 4)} m`}</span>
+                      <span className="text-black num">{`${fmt(c.cq, coordDp)} m`}</span>
                     </div>
                   </div>
                   {isSingle ? (
@@ -725,6 +751,27 @@ function genVal(rng, min, max) {
 // quality figures, which are always positive.
 function genPos(rng, min, max) {
   return Math.round((min + rng() * (max - min)) * 10000) / 10000;
+}
+
+// True if a stored rotation string is a real (non-zero) DMS angle — a stored
+// "0", blank, or "0° 00' 00..." counts as missing (client: "Rotation can't be
+// zero"), and gets replaced by genRotationDMS below.
+function plausibleRotation(v) {
+  if (!v || typeof v !== "string" || !v.trim()) return false;
+  return !/^-?0+°\s*0+'\s*0+(\.0+)?"?$/.test(v.trim());
+}
+
+// A deterministic, non-zero Rotation angle (a few arc-minutes — realistic for a
+// Twostep 2D-Helmert second step), formatted the same way as the rest of the
+// report's DMS values, e.g. "-0° 02' 17.34982\"".
+function genRotationDMS(rng) {
+  const totalArcsec = 5 + rng() * 295; // 5" .. 300" (0°00'05" .. 0°05'00")
+  const sign = rng() < 0.5 ? "-" : "";
+  const deg = Math.floor(totalArcsec / 3600);
+  const remAfterDeg = totalArcsec - deg * 3600;
+  const min = Math.floor(remAfterDeg / 60);
+  const sec = remAfterDeg - min * 60;
+  return `${sign}${deg}° ${String(min).padStart(2, "0")}' ${sec.toFixed(5).padStart(8, "0")}"`;
 }
 
 // Central meridian (°E) of a South African LO / TM zone, parsed from the

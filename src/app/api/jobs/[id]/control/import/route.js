@@ -26,8 +26,9 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "No points to import" }, { status: 400 });
     }
 
-    const existing = await ControlPoint.find({ job: id }).select("name").lean();
+    const existing = await ControlPoint.find({ job: id }).select("name sortOrder").lean();
     const existingNames = new Set(existing.map((p) => p.name));
+    let nextSortOrder = existing.reduce((max, p) => Math.max(max, p.sortOrder ?? -1), -1) + 1;
 
     let created = 0;
     let updated = 0;
@@ -59,7 +60,9 @@ export async function POST(request, { params }) {
         await ControlPoint.findOneAndUpdate({ job: id, name }, doc);
         updated++;
       } else {
-        await ControlPoint.create({ job: id, name, ...doc });
+        // Preserves the order points appear in the CSV — NOT alphabetical
+        // (so "1, 2, 3, ..., 10, 11" stays in that order, never "1, 10, 11, 2").
+        await ControlPoint.create({ job: id, name, ...doc, sortOrder: nextSortOrder++ });
         existingNames.add(name);
         created++;
       }
