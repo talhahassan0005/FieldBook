@@ -99,6 +99,7 @@ body {
      to draw them in, so they disappear. The white-space "margin" is restored via
      the .print-container padding above. */
   @page {
+    size: A4;
     margin: 0;
   }
   /* Repeat table headers on each page; keep rows from splitting mid-row. */

@@ -49,6 +49,10 @@ export default function ControlPointsPage({ params }) {
     }
   }
 
+  // Follows the job's "Coordinates decimal places" setting (same one used on
+  // the printed field book report) so WP1 / MTRM4 etc. show consistent precision.
+  const coordDp = job?.coordDecimals === 3 ? 3 : 4;
+
   useEffect(() => {
     load();
   }, [id]);
@@ -188,10 +192,15 @@ export default function ControlPointsPage({ params }) {
             <F label="Point type">
               <input className="input" list="pointtype-options" value={form.pointType} onChange={(e) => set("pointType", e.target.value)} placeholder="Position" />
               <datalist id="pointtype-options">
+                <option value="Reference Mark" />
+                <option value="Working Point" />
                 <option value="Position" />
-                <option value="Height" />
-                <option value="Control" />
               </datalist>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Use exactly <span className="font-semibold">Reference Mark</span> or{" "}
+                <span className="font-semibold">Working Point</span> for calibration stations (e.g. WP1) —
+                the Coordinate List and Field Book Report group/label points by this value.
+              </p>
             </F>
             <F label="WGS-84 X (m)">
               <input className="input num" value={form.wgs84X} onChange={(e) => set("wgs84X", e.target.value)} />
@@ -248,9 +257,9 @@ export default function ControlPointsPage({ params }) {
               {points.map((p) => (
                 <tr key={p._id} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="px-5 py-2 font-medium text-slate-800">{p.name}</td>
-                  <td className="num px-3 py-2 text-right text-slate-600">{fmt(p.easting)}</td>
-                  <td className="num px-3 py-2 text-right text-slate-600">{fmt(p.northing)}</td>
-                  <td className="num px-3 py-2 text-right text-slate-600">{fmt(p.height)}</td>
+                  <td className="num px-3 py-2 text-right text-slate-600">{fmt(p.easting, coordDp)}</td>
+                  <td className="num px-3 py-2 text-right text-slate-600">{fmt(p.northing, coordDp)}</td>
+                  <td className="num px-3 py-2 text-right text-slate-600">{fmt(p.height, coordDp)}</td>
                   <td className="px-5 py-2 text-right">
                     <button onClick={() => startEdit(p)} className="text-xs font-medium text-brand-600 hover:underline">
                       Edit

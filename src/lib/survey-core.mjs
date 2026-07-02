@@ -21,6 +21,12 @@ export const DEFAULT_HEIGHT_LIMIT = 0.075; // metres
 export const DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES = 5;
 export const DEFAULT_MIN_TIME_DIFF_FARM_MINUTES = 60;
 
+// Field observations must be taken during working hours: 06:00-18:00.
+// An observation timestamped outside this window (e.g. 23:56 or 03:55) is
+// almost always a data-entry/transcription error and is flagged for review.
+export const WORK_HOURS_START_MIN = 6 * 60; // 06:00
+export const WORK_HOURS_END_MIN = 18 * 60; // 18:00
+
 export function num(v) {
   if (v === "" || v === null || v === undefined) return null;
   const n = typeof v === "number" ? v : parseFloat(v);
@@ -38,6 +44,17 @@ function parseObsDateTime(s) {
   }
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Minutes since midnight (local) for a parsed observation Date. */
+function minutesOfDay(d) {
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/** True if a parsed observation Date falls outside the 06:00-18:00 working window. */
+function isOutsideWorkingHours(d) {
+  const m = minutesOfDay(d);
+  return m < WORK_HOURS_START_MIN || m > WORK_HOURS_END_MIN;
 }
 
 /** Horizontal distance between two {easting, northing} points. */
@@ -112,6 +129,8 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
     positionExceeded: false,
     heightExceeded: false,
     timeDiffExceeded: false,
+    workingHoursExceeded: false, // any observation taken outside 06:00-18:00
+    duplicateObservation: false, // two observations share identical E/N (likely a paste error)
     limitExceeded: false,
     isDoublePolar: n >= 2,
     perObservation: [],
@@ -133,11 +152,19 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
       : null;
 
   // Max pairwise horizontal spread = the double-polar position difference.
+  // Also detect an EXACT duplicate pair (identical Easting & Northing) — this is
+  // never a genuine independent double-polar observation, it's almost always the
+  // same data pasted twice for both polars (client: "second polar coordinates
+  // are the same as first polar").
   let positionDiff = 0;
+  let duplicateObservation = false;
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const d = dist2D(obs[i], obs[j]);
       if (d > positionDiff) positionDiff = d;
+      if (obs[i].easting === obs[j].easting && obs[i].northing === obs[j].northing) {
+        duplicateObservation = true;
+      }
     }
   }
 
@@ -156,6 +183,7 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
   // Max pairwise gap between observation date/times (minutes) — double polar
   // requires the two visits to be genuinely independent, not back-to-back.
   const obsTimes = obs.map((o) => parseObsDateTime(o.dateTime)).filter(Boolean);
+  const workingHoursExceeded = obsTimes.some((d) => isOutsideWorkingHours(d));
   let timeDiffMinutes = null;
   if (obsTimes.length >= 2) {
     let maxDiffMs = 0;
@@ -223,7 +251,14 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
     positionExceeded,
     heightExceeded,
     timeDiffExceeded,
-    limitExceeded: positionExceeded || heightExceeded || timeDiffExceeded,
+    workingHoursExceeded,
+    duplicateObservation,
+    limitExceeded:
+      positionExceeded ||
+      heightExceeded ||
+      timeDiffExceeded ||
+      workingHoursExceeded ||
+      duplicateObservation,
     perObservation,
   };
 }

@@ -336,11 +336,11 @@ export default function ReportPage({ params }) {
                 from 22rem per client ("move a bit to the left"). */}
             <div className="flex text-[12.5px]">
               <span className="w-[17rem] shrink-0">Rotation origin:</span>
-              <span className="num">X0: {fmt(rotOriginX)} m</span>
+              <span className="num">X0: {fmt(rotOriginX, coordDp)} m</span>
             </div>
             <div className="flex text-[12.5px]">
               <span className="w-[17rem] shrink-0" />
-              <span className="num">Y0: {fmt(rotOriginY)} m</span>
+              <span className="num">Y0: {fmt(rotOriginY, coordDp)} m</span>
             </div>
           </Fields>
           <table className="mt-2 border-collapse">
@@ -414,9 +414,9 @@ export default function ReportPage({ params }) {
                   <Td>{c.name}</Td>
                   <Td>{c.name}</Td>
                   <Td>Position</Td>
-                  <Td right mono>{c.resEv != null ? `${fmt(c.resEv, 4)} m` : "-"}</Td>
-                  <Td right mono>{c.resNv != null ? `${fmt(c.resNv, 4)} m` : "-"}</Td>
-                  <Td right mono>{c.resHgtv != null ? `${fmt(c.resHgtv, 4)} m` : "-"}</Td>
+                  <Td right mono>{c.resEv != null ? `${fmt(c.resEv, coordDp)} m` : "-"}</Td>
+                  <Td right mono>{c.resNv != null ? `${fmt(c.resNv, coordDp)} m` : "-"}</Td>
+                  <Td right mono>{c.resHgtv != null ? `${fmt(c.resHgtv, coordDp)} m` : "-"}</Td>
                 </tr>
               ))}
             </tbody>
@@ -449,9 +449,9 @@ export default function ReportPage({ params }) {
                     {identicalRows.map((c) => (
                       <tr key={c._id}>
                         <Td>{c.name}</Td>
-                        <Td className="right mono pr-16">{fmt(c.X, 4)}</Td>
-                        <Td className="right mono pr-16">{fmt(c.Y, 4)}</Td>
-                        <Td className="right mono pr-16">{fmt(c.Z, 4)}</Td>
+                        <Td className="right mono pr-16">{fmt(c.X, coordDp)}</Td>
+                        <Td className="right mono pr-16">{fmt(c.Y, coordDp)}</Td>
+                        <Td className="right mono pr-16">{fmt(c.Z, coordDp)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -475,7 +475,7 @@ export default function ReportPage({ params }) {
                     <Td>{c.name}</Td>
                     <Td className="right mono pr-16">{fmt2z(c.easting)}</Td>
                     <Td className="right mono pr-16">{fmt2z(c.northing)}</Td>
-                    <Td className="right mono pr-16">{fmt(c.height, 4)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.height, coordDp)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -507,34 +507,34 @@ export default function ReportPage({ params }) {
                       <div className="pl-4">
                           <CoordLine
                             label="Easting"
-                            a={hasRef ? `${fmt(ref.easting, 4)} m` : null}
-                            b={`${fmt(o.easting, 4)} m`}
+                            a={hasRef ? `${fmt(ref.easting, coordDp)} m` : null}
+                            b={`${fmt(o.easting, coordDp)} m`}
                           />
                           <CoordLine
                             label="Northing"
-                            a={hasRef ? `${fmt(ref.northing, 4)} m` : null}
-                            b={`${fmt(o.northing, 4)} m`}
+                            a={hasRef ? `${fmt(ref.northing, coordDp)} m` : null}
+                            b={`${fmt(o.northing, coordDp)} m`}
                           />
                           <CoordLine
                             label="Ortho. Hgt"
-                            a={hasRef ? fmt(ref.height, 4) : null}
-                            b={fmt(o.height, 4)}
+                            a={hasRef ? fmt(ref.height, coordDp) : null}
+                            b={fmt(o.height, coordDp)}
                           />
                       </div>
                     </div>
                     {hasQuality && (
                       <div className=" pt-1 text-[12px]">
                         <span className="font-normal pl-1">Quality:</span>
-                        <span className="num pl-8">Sd. E: {fmt(o.sdE, 4)} m</span>
+                        <span className="num pl-8">Sd. E: {fmt(o.sdE, coordDp)} m</span>
                         <span className="pl-7">
-                            <span className="num pl-32">Sd. N: {fmt(o.sdN, 4)} m</span>
+                            <span className="num pl-32">Sd. N: {fmt(o.sdN, coordDp)} m</span>
                         </span>
-                        <span className="num pl-48">Sd. Hgt: {fmt(o.sdHgt, 4)} m</span>
+                        <span className="num pl-48">Sd. Hgt: {fmt(o.sdHgt, coordDp)} m</span>
                         <span />
                         <br></br>
                         <div className="pl-4">
-                            <span className="num pl-16">Posn. Qlty: {fmt(pq, 4)} m</span>
-                            <span className="num pl-32">Sd. Slope: {fmt(o.sdSlope, 4)} m</span>
+                            <span className="num pl-16">Posn. Qlty: {fmt(pq, coordDp)} m</span>
+                            <span className="num pl-32">Sd. Slope: {fmt(o.sdSlope, coordDp)} m</span>
                         </div>
                         <span />
                       </div>
@@ -613,9 +613,9 @@ export default function ReportPage({ params }) {
                             </Td>
                             <Td nowrap>{o.reference || "-"}</Td>
                             <Td nowrap>{o.dateTime || "-"}</Td>
-                            <Td right mono>{fmt(o.deviationPosn, 4)}</Td>
-                            <Td right mono>{fmt(o.deviationHgt, 4)}</Td>
-                            <Td right mono>{fmt(o.deviationCombined, 4)}</Td>
+                            <Td right mono>{fmt(o.deviationPosn, coordDp)}</Td>
+                            <Td right mono>{fmt(o.deviationHgt, coordDp)}</Td>
+                            <Td right mono>{fmt(o.deviationCombined, coordDp)}</Td>
                           </tr>
                         ))}
                       </tbody>
@@ -645,7 +645,7 @@ function ImageWithFallback({ src }) {
     // original Leica Geo Office field book exactly when no logo is embedded.
     return (
       <div
-        className="absolute right-0 top-0 bg-white"
+        className="absolute right-0 top-[-15px]"
         style={{ width: 232, height: 86 }}
       >
         <div className="flex items-start" style={{ gap: 6, padding: 6 }}>

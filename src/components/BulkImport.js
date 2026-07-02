@@ -137,6 +137,12 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
   const surveyPreview = parsed.points.filter((p) => !p.isControl);
   const controlPreview = parsed.points.filter((p) => p.isControl);
   const exceededCount = surveyPreview.filter((p) => p.computed.limitExceeded).length;
+  // Second polar pasted as an exact copy of the first (client: "second polar
+  // coordinates are the same as first polar") — flag it separately from a
+  // generic limit-exceeded so the surveyor knows exactly what to check.
+  const duplicateCount = surveyPreview.filter((p) => p.computed.duplicateObservation).length;
+  // Observation timestamps outside 06:00-18:00 working hours.
+  const workingHoursCount = surveyPreview.filter((p) => p.computed.workingHoursExceeded).length;
   const totalCount = parsed.points.length;
   // Closest pair of survey points — warn if two beacons are suspiciously close
   // (client: points "should not be too close to each other").
@@ -395,6 +401,22 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
           Points <span className="font-semibold">{closest.pair[0]}</span> and{" "}
           <span className="font-semibold">{closest.pair[1]}</span> are only {closest.min.toFixed(3)} m apart — check
           spacing (survey points shouldn’t be too close to each other).
+        </div>
+      )}
+
+      {/* Duplicate-observation warning — second polar identical to the first */}
+      {duplicateCount > 0 && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {duplicateCount} point{duplicateCount === 1 ? "" : "s"} have identical Easting/Northing across
+          observations — the second polar looks like it was pasted from the first. Check the source data.
+        </div>
+      )}
+
+      {/* Working-hours warning — an observation timestamp outside 06:00-18:00 */}
+      {workingHoursCount > 0 && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {workingHoursCount} point{workingHoursCount === 1 ? "" : "s"} have an observation timestamped
+          outside working hours (06:00–18:00) — check the date/time entered.
         </div>
       )}
 

@@ -306,7 +306,19 @@ export default function SurveyPointForm({
             />
           )}
         </div>
-        {preview.limitExceeded && (
+        {preview.duplicateObservation && (
+          <p className="mt-3 text-xs font-medium text-red-600">
+            ⚠ Two observations have identical Easting/Northing — the second polar looks like it was
+            pasted from the first. Re-check the source data for this point.
+          </p>
+        )}
+        {preview.workingHoursExceeded && (
+          <p className="mt-3 text-xs font-medium text-red-600">
+            ⚠ One or more observations are timestamped outside working hours (06:00–18:00) — check the
+            date/time entered for this point.
+          </p>
+        )}
+        {preview.limitExceeded && !preview.duplicateObservation && !preview.workingHoursExceeded && (
           <p className="mt-3 text-xs font-medium text-red-600">
             {preview.timeDiffExceeded && !preview.positionExceeded && !preview.heightExceeded
               ? "⚠ The two observations were taken too close together in time — re-survey with a longer gap between them."

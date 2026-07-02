@@ -308,6 +308,22 @@ export default function JobForm({ initial, jobId }) {
               ))}
             </datalist>
           </Field>
+          <Field label="Geoid model">
+            <input
+              className="input"
+              value={form.geoidModel}
+              onChange={(e) => set("geoidModel", e.target.value)}
+              placeholder="EGM2008"
+            />
+          </Field>
+          <Field label="CSCS model">
+            <input
+              className="input"
+              value={form.cscsModel}
+              onChange={(e) => set("cscsModel", e.target.value)}
+              placeholder="Local CSCS"
+            />
+          </Field>
         </div>
 
         {/*
@@ -324,8 +340,6 @@ export default function JobForm({ initial, jobId }) {
         <input type="hidden" value={form.ellipsoid} readOnly />
         <input type="hidden" value={form.heightMode} readOnly />
         <input type="hidden" value={form.coordinateSystemCreated} readOnly />
-        <input type="hidden" value={form.geoidModel} readOnly />
-        <input type="hidden" value={form.cscsModel} readOnly />
         <input type="hidden" value={form.transformation.commonPoints} readOnly />
         <input type="hidden" value={form.transformation.rotationOriginX} readOnly />
         <input type="hidden" value={form.transformation.rotationOriginY} readOnly />
