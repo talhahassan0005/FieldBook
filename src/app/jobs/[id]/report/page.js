@@ -645,7 +645,7 @@ function ImageWithFallback({ src }) {
     // original Leica Geo Office field book exactly when no logo is embedded.
     return (
       <div
-        className="absolute right-0 top-[-15px]"
+        className="absolute right-0 top-0 bg-white"
         style={{ width: 232, height: 86 }}
       >
         <div className="flex items-start" style={{ gap: 6, padding: 6 }}>

@@ -3,9 +3,13 @@ import dbConnect from "@/lib/mongodb";
 import SurveyPoint from "@/models/SurveyPoint";
 import Job from "@/models/Job";
 import { computeSurveyPoint } from "@/lib/survey";
+import { getAuthUser } from "@/lib/auth";
 
 export async function PUT(request, { params }) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     await dbConnect();
 
@@ -14,6 +18,9 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Survey point not found" }, { status: 404 });
 
     const job = await Job.findById(existing.job).lean();
+    if (!job || String(job.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Survey point not found" }, { status: 404 });
+    }
     const body = await request.json();
 
     if (body.name !== undefined) existing.name = body.name;
@@ -42,8 +49,17 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     await dbConnect();
+    const existing = await SurveyPoint.findById(id).lean();
+    if (!existing) return NextResponse.json({ error: "Survey point not found" }, { status: 404 });
+    const job = await Job.findById(existing.job).select("owner").lean();
+    if (!job || String(job.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Survey point not found" }, { status: 404 });
+    }
     const point = await SurveyPoint.findByIdAndDelete(id);
     if (!point) return NextResponse.json({ error: "Survey point not found" }, { status: 404 });
     return NextResponse.json({ ok: true });

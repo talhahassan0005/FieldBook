@@ -4,13 +4,19 @@ import Job from "@/models/Job";
 import ControlPoint from "@/models/ControlPoint";
 import SurveyPoint from "@/models/SurveyPoint";
 import { computeSurveyPoint } from "@/lib/survey";
+import { getAuthUser } from "@/lib/auth";
 
 export async function GET(request, { params }) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     await dbConnect();
     const job = await Job.findById(id).lean();
-    if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    if (!job || String(job.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
     return NextResponse.json(job);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -19,13 +25,19 @@ export async function GET(request, { params }) {
 
 export async function PUT(request, { params }) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     await dbConnect();
     const body = await request.json();
+    delete body.owner; // owner can never be reassigned via this endpoint
 
     // Capture old limits before the update so we can detect a tolerance change.
     const prev = await Job.findById(id).lean();
-    if (!prev) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    if (!prev || String(prev.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     const job = await Job.findByIdAndUpdate(id, body, {
       new: true,
@@ -75,10 +87,16 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     await dbConnect();
-    const job = await Job.findByIdAndDelete(id);
-    if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    const existing = await Job.findById(id).lean();
+    if (!existing || String(existing.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+    await Job.findByIdAndDelete(id);
     // Cascade: remove this job's control points and survey points.
     await Promise.all([
       ControlPoint.deleteMany({ job: id }),

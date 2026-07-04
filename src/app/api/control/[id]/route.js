@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import ControlPoint from "@/models/ControlPoint";
+import Job from "@/models/Job";
+import { getAuthUser } from "@/lib/auth";
 
 export async function PUT(request, { params }) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     await dbConnect();
+    const existing = await ControlPoint.findById(id).lean();
+    if (!existing) return NextResponse.json({ error: "Control point not found" }, { status: 404 });
+    const ownerJob = await Job.findById(existing.job).select("owner").lean();
+    if (!ownerJob || String(ownerJob.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Control point not found" }, { status: 404 });
+    }
+
     const body = await request.json();
     delete body.job; // don't allow moving a point to another job
     const point = await ControlPoint.findByIdAndUpdate(id, body, {
@@ -27,8 +39,17 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     await dbConnect();
+    const existing = await ControlPoint.findById(id).lean();
+    if (!existing) return NextResponse.json({ error: "Control point not found" }, { status: 404 });
+    const ownerJob = await Job.findById(existing.job).select("owner").lean();
+    if (!ownerJob || String(ownerJob.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Control point not found" }, { status: 404 });
+    }
     const point = await ControlPoint.findByIdAndDelete(id);
     if (!point) return NextResponse.json({ error: "Control point not found" }, { status: 404 });
     return NextResponse.json({ ok: true });

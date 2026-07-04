@@ -9,6 +9,9 @@ const { Schema } = mongoose;
 
 const JobSchema = new Schema(
   {
+    // Owner of this job — every job belongs to exactly one signed-in user.
+    owner: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+
     name: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     creator: { type: String, default: "" },

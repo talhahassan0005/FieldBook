@@ -10,6 +10,7 @@
  */
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
 import { computeSurveyPoint } from "../src/lib/survey-core.mjs";
 
 dotenv.config({ path: ".env.local" });
@@ -20,6 +21,11 @@ if (!MONGODB_URI) {
   console.error("✗ MONGODB_URI is not set. Copy .env.example to .env.local first.");
   process.exit(1);
 }
+
+// Demo login for the seeded job (override with env vars if you like).
+const SEED_USER_EMAIL = (process.env.SEED_USER_EMAIL || "demo@fieldbook.local").toLowerCase();
+const SEED_USER_PASSWORD = process.env.SEED_USER_PASSWORD || "password123";
+const SEED_USER_NAME = process.env.SEED_USER_NAME || "Demo User";
 
 // ---- Sample data (from field book.docx — MATEBELE2022) -------------------
 
@@ -108,6 +114,25 @@ async function run() {
   const Jobs = db.collection("jobs");
   const Controls = db.collection("controlpoints");
   const Surveys = db.collection("surveypoints");
+  const Users = db.collection("users");
+
+  // Ensure a demo user exists so the seeded job is actually visible after
+  // signing in (jobs are scoped to their owner).
+  let demoUser = await Users.findOne({ email: SEED_USER_EMAIL });
+  if (!demoUser) {
+    const passwordHash = await bcrypt.hash(SEED_USER_PASSWORD, 10);
+    const { insertedId } = await Users.insertOne({
+      name: SEED_USER_NAME,
+      email: SEED_USER_EMAIL,
+      passwordHash,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    demoUser = { _id: insertedId };
+    console.log(`✓ Created demo user — sign in with ${SEED_USER_EMAIL} / ${SEED_USER_PASSWORD}`);
+  } else {
+    console.log(`• Using existing demo user ${SEED_USER_EMAIL}`);
+  }
 
   // Idempotent: remove any prior copy of this sample job + its children.
   const existing = await Jobs.findOne({ name: job.name });
@@ -122,7 +147,7 @@ async function run() {
 
   const now = new Date();
   const jobId = new mongoose.Types.ObjectId();
-  await Jobs.insertOne({ _id: jobId, ...job, createdAt: now, updatedAt: now });
+  await Jobs.insertOne({ _id: jobId, ...job, owner: demoUser._id, createdAt: now, updatedAt: now });
 
   await Controls.insertMany(
     controlPoints.map((c) => ({
@@ -176,6 +201,7 @@ async function run() {
   console.log(
     `✓ Seeded "${job.name}" — ${controlPoints.length} control points, ${surveyPoints.length} survey points.`
   );
+  console.log(`  Sign in at /login with ${SEED_USER_EMAIL} / ${SEED_USER_PASSWORD} to view it.`);
   await mongoose.disconnect();
 }
 

@@ -2,6 +2,7 @@ import "./globals.css";
 import Link from "next/link";
 import { ToastProvider } from "@/components/Toast";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
+import HeaderActions from "@/components/HeaderActions";
 
 export const metadata = {
   title: "Cadastral Field Book",
@@ -37,9 +38,7 @@ export default function RootLayout({ children }) {
                 <div className="text-[11px] text-slate-500">RTK GPS · Double-Polar Surveys</div>
               </div>
             </Link>
-            <Link href="/jobs/new" className="btn-primary">
-              + New Job
-            </Link>
+            <HeaderActions />
           </div>
             </header>
             <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
