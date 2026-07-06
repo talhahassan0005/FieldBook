@@ -6,8 +6,6 @@ import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
 const LO_OPTIONS = ["LO15", "LO17", "LO19", "LO21", "LO23", "LO25", "LO27", "LO29", "LO31", "LO33"];
-const DEFAULT_GEOID_MODEL = "-";
-const DEFAULT_CSCS_MODEL = "-";
 
 const EMPTY = {
   name: "",
@@ -26,8 +24,8 @@ const EMPTY = {
   residualsFormula: "",
   ellipsoid: "",
   projection: "",
-  geoidModel: DEFAULT_GEOID_MODEL,
-  cscsModel: DEFAULT_CSCS_MODEL,
+  geoidModel: "",
+  cscsModel: "",
   positionLimit: 0.05,
   heightLimit: 0.075,
   minTimeDiffMinutes: 25,
@@ -93,8 +91,8 @@ export default function JobForm({ initial, jobId }) {
       residualsFormula: sys.residualsFormula ?? "",
       ellipsoid: sys.ellipsoid ?? "",
       projection: sys.projection ?? "",
-      geoidModel: sys.geoidModel ?? DEFAULT_GEOID_MODEL,
-      cscsModel: sys.cscsModel ?? DEFAULT_CSCS_MODEL,
+      geoidModel: sys.geoidModel ?? "",
+      cscsModel: sys.cscsModel ?? "",
       transformation: {
         commonPoints: sys.transformation?.commonPoints ?? "",
         rotationOriginX: sys.transformation?.rotationOriginX ?? "",
@@ -123,11 +121,20 @@ export default function JobForm({ initial, jobId }) {
     );
     if (match) applyCoordSystem(match);
   }
-  // Job "Created" (when the machine was set up on site). The coordinate-system
-  // "Created" is entered manually so the surveyor can record the real setup time.
+  // Job "Created" (when the machine was set up on site). Auto-default the
+  // coordinate-system "Created" to ~1h15m later, same date (client's request),
+  // unless the user already set it or a saved system supplied it.
   function setJobCreated(v) {
     setForm((f) => {
-      return { ...f, jobCreated: v };
+      const next = { ...f, jobCreated: v };
+      if (!f.coordinateSystemCreated) {
+        const d = parseDateTime(v);
+        if (d) {
+          d.setMinutes(d.getMinutes() + 75);
+          next.coordinateSystemCreated = fmtDateTime(d);
+        }
+      }
+      return next;
     });
   }
   // Update one date/time part (digits only, capped length) and rebuild the
@@ -286,22 +293,6 @@ export default function JobForm({ initial, jobId }) {
                 <option key={lo} value={lo} />
               ))}
             </datalist>
-          </Field>
-          <Field label="Geoid model">
-            <input
-              className="input"
-              value={form.geoidModel}
-              onChange={(e) => set("geoidModel", e.target.value)}
-              placeholder="EGM2008"
-            />
-          </Field>
-          <Field label="CSCS model">
-            <input
-              className="input"
-              value={form.cscsModel}
-              onChange={(e) => set("cscsModel", e.target.value)}
-              placeholder="Local CSCS"
-            />
           </Field>
           <Field label="Created (Coordinate System)">
             <input

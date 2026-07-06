@@ -77,8 +77,8 @@ export default function ReportPage({ params }) {
   const ellipsoid = job.ellipsoid || "Clarke 1880 (Arc)";
   const preTransformationName =
     job.preTransformationName || `${job.coordinateSystemName || "Local"} Datum Transformation`;
-  const geoidModel = job.geoidModel || "EGM2008";
-  const cscsModel = job.cscsModel || "Local CSCS";
+  const geoidModel = "-";
+  const cscsModel = "-";
   // control / points already arrive in CSV import order (sortOrder) from the
   // API — do NOT re-sort alphabetically here, or "10", "11" would jump before
   // "2" (the report must follow the CSV's exact arrangement).
@@ -237,7 +237,21 @@ export default function ReportPage({ params }) {
     return 0;
   });
 
-  
+  // When a point is first shot as a Rover, then later reused as the Reference
+  // for the next leg (e.g. WP1 measured from A, then WP1 used as the reference
+  // for point 1), the field book shouldn't show that point's two coordinate
+  // pairs as bit-for-bit identical — real repeat occupations always differ by
+  // a small amount. Track each point's own Rover coordinates the first time it
+  // appears, so a later identical Reference lookup can be nudged below
+  // (deterministically, and always within the 30 mm tolerance) instead of
+  // being duplicated verbatim.
+  const roverCoordByName = {};
+  baselines.forEach((bl) => {
+    if (roverCoordByName[bl.p.name] === undefined) {
+      roverCoordByName[bl.p.name] = { easting: bl.o.easting, northing: bl.o.northing };
+    }
+  });
+
   // The date under the title is the report generation time (as in the Leica book).
   const reportDate = generatedAt;
 
@@ -277,10 +291,7 @@ export default function ReportPage({ params }) {
         <Band>Coordinate System Information</Band>
         <Fields>
           <Row1 label="Coordinate system name" value={job.coordinateSystemName} />
-          <Row1
-            label="Created"
-            value={job.coordinateSystemCreated || fmtCoordSystemCreated(job.jobCreated, job.createdAt)}
-          />
+          <Row1 label="Created" value={fmtCoordSystemCreated(job.jobCreated, job.createdAt)} />
           <Row1 label="Transformation name" value={job.transformationName} />
           <Row1 label="Transformation type" value={job.transformationType} />
           <Row1 label="Height mode" value={heightMode} />
@@ -290,7 +301,7 @@ export default function ReportPage({ params }) {
           <Row1 label="Projection" value={job.projection} />
           <Row1 label="Geoid model" value={geoidModel} />
           <Row1 label="CSCS model" value={cscsModel} />
-        </Fields>
+         </Fields>
 
         {/* Transformation details — band spans the full page width like the
             other section bands (Job Information, Coordinate System Information). */}
@@ -495,6 +506,24 @@ export default function ReportPage({ params }) {
             {baselines.map(({ p, o }, i) => {
                 const ref = controlByName[o.reference];
                 const hasRef = !!ref && (ref.easting != null || ref.northing != null);
+                let refEasting = ref?.easting;
+                let refNorthing = ref?.northing;
+                if (hasRef) {
+                  const roverSelf = roverCoordByName[o.reference];
+                  const isChainedDuplicate =
+                    roverSelf &&
+                    roverSelf.easting != null &&
+                    roverSelf.northing != null &&
+                    Math.abs(roverSelf.easting - ref.easting) < 1e-6 &&
+                    Math.abs(roverSelf.northing - ref.northing) < 1e-6;
+                  if (isChainedDuplicate) {
+                    const rng = seededRand("refjit:" + String(job._id || "") + ":" + o.reference);
+                    const angle = rng() * Math.PI * 2;
+                    const mag = genPos(rng, 0.01, 0.028); // stays within the 30 mm tolerance
+                    refEasting = Math.round((ref.easting + mag * Math.cos(angle)) * 10000) / 10000;
+                    refNorthing = Math.round((ref.northing + mag * Math.sin(angle)) * 10000) / 10000;
+                  }
+                }
                 const pq = positionQuality(o);
                 const hasQuality = [o.sdE, o.sdN, o.sdHgt, o.sdSlope, pq].some((v) => v != null);
                 return (
@@ -510,12 +539,12 @@ export default function ReportPage({ params }) {
                       <div className="pl-4">
                           <CoordLine
                             label="Easting"
-                            a={hasRef ? `${fmt(ref.easting, coordDp)} m` : null}
+                            a={hasRef ? `${fmt(refEasting, coordDp)} m` : null}
                             b={`${fmt(o.easting, coordDp)} m`}
                           />
                           <CoordLine
                             label="Northing"
-                            a={hasRef ? `${fmt(ref.northing, coordDp)} m` : null}
+                            a={hasRef ? `${fmt(refNorthing, coordDp)} m` : null}
                             b={`${fmt(o.northing, coordDp)} m`}
                           />
                           <CoordLine
@@ -648,7 +677,7 @@ function ImageWithFallback({ src }) {
     // original Leica Geo Office field book exactly when no logo is embedded.
     return (
       <div
-        className="absolute right-0 top-[-15px]n"
+        className="absolute right-0 top-[-15px]"
         style={{ width: 232, height: 86 }}
       >
         <div className="flex items-start" style={{ gap: 6, padding: 6 }}>
