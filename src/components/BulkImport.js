@@ -395,31 +395,6 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
         </div>
       )}
 
-      {/* Spacing warning — survey points too close together */}
-      {closest && closest.min < 1 && (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          Points <span className="font-semibold">{closest.pair[0]}</span> and{" "}
-          <span className="font-semibold">{closest.pair[1]}</span> are only {closest.min.toFixed(3)} m apart — check
-          spacing (survey points shouldn’t be too close to each other).
-        </div>
-      )}
-
-      {/* Duplicate-observation warning — second polar identical to the first */}
-      {duplicateCount > 0 && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {duplicateCount} point{duplicateCount === 1 ? "" : "s"} have identical Easting/Northing across
-          observations — the second polar looks like it was pasted from the first. Check the source data.
-        </div>
-      )}
-
-      {/* Working-hours warning — an observation timestamp outside 06:00-18:00 */}
-      {workingHoursCount > 0 && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {workingHoursCount} point{workingHoursCount === 1 ? "" : "s"} have an observation timestamped
-          outside working hours (06:00–18:00) — check the date/time entered.
-        </div>
-      )}
-
       {/* Unified preview — set the Type for each point (Beacon / Reference Mark / Working Point) */}
       {parsed.points.length > 0 && (
         <div className="mt-4">
@@ -610,3 +585,5 @@ function PolarBox({ title, refValue, onRef, text, onText }) {
     </div>
   );
 }
+
+

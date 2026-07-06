@@ -4,9 +4,10 @@ import { useState, useEffect, useId, isValidElement, cloneElement } from "react"
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
-import { DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES, DEFAULT_MIN_TIME_DIFF_FARM_MINUTES } from "@/lib/survey";
 
 const LO_OPTIONS = ["LO15", "LO17", "LO19", "LO21", "LO23", "LO25", "LO27", "LO29", "LO31", "LO33"];
+const DEFAULT_GEOID_MODEL = "-";
+const DEFAULT_CSCS_MODEL = "-";
 
 const EMPTY = {
   name: "",
@@ -25,12 +26,11 @@ const EMPTY = {
   residualsFormula: "",
   ellipsoid: "",
   projection: "",
-  geoidModel: "",
-  cscsModel: "",
+  geoidModel: DEFAULT_GEOID_MODEL,
+  cscsModel: DEFAULT_CSCS_MODEL,
   positionLimit: 0.05,
   heightLimit: 0.075,
-  surveyType: "plot",
-  minTimeDiffMinutes: DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+  minTimeDiffMinutes: 25,
   coordDecimals: 4,
   timezone: "2h 00'",
   applicationSoftware: "LEICA Geo Office 7.0",
@@ -80,18 +80,6 @@ export default function JobForm({ initial, jobId }) {
   }
 
   // Plot (small site) vs farm (large site) sets which minimum time gap is
-  // required between a point's two double-polar observations — the surveyor
-  // can still override the minutes field afterwards.
-  function setSurveyType(type) {
-    setForm((f) => ({
-      ...f,
-      surveyType: type,
-      minTimeDiffMinutes:
-        type === "farm" ? DEFAULT_MIN_TIME_DIFF_FARM_MINUTES : DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
-    }));
-  }
-
-  // When a known coordinate system is chosen, auto-fill its calibration fields
   // (transformation + metadata) — "entered once per system, reused by every job".
   function applyCoordSystem(sys) {
     setForm((f) => ({
@@ -105,8 +93,8 @@ export default function JobForm({ initial, jobId }) {
       residualsFormula: sys.residualsFormula ?? "",
       ellipsoid: sys.ellipsoid ?? "",
       projection: sys.projection ?? "",
-      geoidModel: sys.geoidModel ?? "",
-      cscsModel: sys.cscsModel ?? "",
+      geoidModel: sys.geoidModel ?? DEFAULT_GEOID_MODEL,
+      cscsModel: sys.cscsModel ?? DEFAULT_CSCS_MODEL,
       transformation: {
         commonPoints: sys.transformation?.commonPoints ?? "",
         rotationOriginX: sys.transformation?.rotationOriginX ?? "",
@@ -135,20 +123,11 @@ export default function JobForm({ initial, jobId }) {
     );
     if (match) applyCoordSystem(match);
   }
-  // Job "Created" (when the machine was set up on site). Auto-default the
-  // coordinate-system "Created" to ~1h15m later, same date (client's request),
-  // unless the user already set it or a saved system supplied it.
+  // Job "Created" (when the machine was set up on site). The coordinate-system
+  // "Created" is entered manually so the surveyor can record the real setup time.
   function setJobCreated(v) {
     setForm((f) => {
-      const next = { ...f, jobCreated: v };
-      if (!f.coordinateSystemCreated) {
-        const d = parseDateTime(v);
-        if (d) {
-          d.setMinutes(d.getMinutes() + 75);
-          next.coordinateSystemCreated = fmtDateTime(d);
-        }
-      }
-      return next;
+      return { ...f, jobCreated: v };
     });
   }
   // Update one date/time part (digits only, capped length) and rebuild the
@@ -193,7 +172,7 @@ export default function JobForm({ initial, jobId }) {
         ...form,
         positionLimit: parseFloat(form.positionLimit) || 0.05,
         heightLimit: parseFloat(form.heightLimit) || 0.075,
-        minTimeDiffMinutes: parseFloat(form.minTimeDiffMinutes) || DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+        minTimeDiffMinutes: parseFloat(form.minTimeDiffMinutes) || 25,
         coordDecimals: form.coordDecimals === 3 ? 3 : 4,
         transformation: {
           commonPoints: numOrNull(form.transformation.commonPoints),
@@ -324,6 +303,14 @@ export default function JobForm({ initial, jobId }) {
               placeholder="Local CSCS"
             />
           </Field>
+          <Field label="Created (Coordinate System)">
+            <input
+              className="input"
+              type="datetime-local"
+              value={form.coordinateSystemCreated}
+              onChange={(e) => set("coordinateSystemCreated", e.target.value)}
+            />
+          </Field>
         </div>
 
         {/*
@@ -339,7 +326,6 @@ export default function JobForm({ initial, jobId }) {
         <input type="hidden" value={form.residualsFormula} readOnly />
         <input type="hidden" value={form.ellipsoid} readOnly />
         <input type="hidden" value={form.heightMode} readOnly />
-        <input type="hidden" value={form.coordinateSystemCreated} readOnly />
         <input type="hidden" value={form.transformation.commonPoints} readOnly />
         <input type="hidden" value={form.transformation.rotationOriginX} readOnly />
         <input type="hidden" value={form.transformation.rotationOriginY} readOnly />
@@ -409,42 +395,21 @@ export default function JobForm({ initial, jobId }) {
         </div>
 
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <span className="label">Survey type</span>
-          <p className="mb-2 text-[11px] text-slate-400">
-            Plot or farm — sets the minimum time gap required between a point&apos;s two double-polar
-            observations (a small plot can be re-observed within minutes; a farm needs about an hour).
-          </p>
-          <div className="mb-3 flex flex-wrap items-center gap-5 text-sm text-slate-700">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="surveyType"
-                checked={form.surveyType !== "farm"}
-                onChange={() => setSurveyType("plot")}
-              />
-              Plot (small site — minutes apart)
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="surveyType"
-                checked={form.surveyType === "farm"}
-                onChange={() => setSurveyType("farm")}
-              />
-              Farm (large site — ~1 hr apart)
-            </label>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Minimum time difference — between observations (min)">
-              <input
-                type="number"
-                step="1"
-                className="input num"
-                value={form.minTimeDiffMinutes}
-                onChange={(e) => set("minTimeDiffMinutes", e.target.value)}
-              />
-            </Field>
-          </div>
+          <Field label="Minimum time difference — between observations (min)" full>
+            <p className="mb-2 text-[11px] text-slate-400">
+              Enter the minimum time gap required between a point&apos;s two double-polar observations.
+              Choose any interval based on your survey type (e.g., minutes for a small plot, ~60 min for a farm).
+            </p>
+            <input
+              type="number"
+              step="1"
+              min="0"
+              className="input num"
+              value={form.minTimeDiffMinutes}
+              onChange={(e) => set("minTimeDiffMinutes", e.target.value)}
+              placeholder="e.g., 25"
+            />
+          </Field>
         </div>
       </section>
 

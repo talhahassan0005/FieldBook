@@ -6,22 +6,33 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import PasswordField from "@/components/PasswordField";
 
-export default function SignupPage() {
+export default function ForgotPasswordPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setMessage("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     setLoading(true);
     try {
-      await api.post("/api/auth/signup", { name, email, password });
-      router.push("/");
-      router.refresh();
+      const response = await api.post("/api/auth/reset-password", { email, password });
+      setMessage(response.message || "Password updated successfully");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setTimeout(() => router.push("/login"), 1200);
     } catch (err) {
       setError(err.message);
       setLoading(false);
@@ -31,9 +42,9 @@ export default function SignupPage() {
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
       <div className="card p-6">
-        <h1 className="text-xl font-bold text-slate-900">Create your account</h1>
+        <h1 className="text-xl font-bold text-slate-900">Reset your password</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Sign up to create and manage your own survey jobs.
+          Enter your account email and a new password to update it.
         </p>
 
         {error && (
@@ -42,22 +53,13 @@ export default function SignupPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <label className="label" htmlFor="name">
-              Name
-            </label>
-            <input
-              id="name"
-              type="text"
-              required
-              autoComplete="name"
-              className="input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-            />
+        {message && (
+          <div className="mt-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            {message}
           </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="label" htmlFor="email">
               Email
@@ -74,11 +76,22 @@ export default function SignupPage() {
             />
           </div>
           <PasswordField
-            id="password"
-            label="Password"
+            id="new-password"
+            label="New password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
+            placeholder="Enter a new password"
+            autoComplete="new-password"
+            minLength={6}
+            required
+            disabled={loading}
+          />
+          <PasswordField
+            id="confirm-password"
+            label="Confirm password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Re-enter the new password"
             autoComplete="new-password"
             minLength={6}
             required
@@ -91,18 +104,18 @@ export default function SignupPage() {
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
                   <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" opacity="0.75" />
                 </svg>
-                Creating account…
+                Updating password…
               </span>
             ) : (
-              "Create account"
+              "Update password"
             )}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-slate-500">
-          Already have an account?{" "}
+          Back to{" "}
           <Link href="/login" className="font-medium text-brand-600 hover:underline">
-            Sign in
+            sign in
           </Link>
         </p>
       </div>

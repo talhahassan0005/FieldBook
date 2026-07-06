@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import PasswordField from "@/components/PasswordField";
 
 function LoginForm() {
   const router = useRouter();
@@ -59,25 +60,36 @@ function LoginForm() {
               placeholder="you@example.com"
             />
           </div>
-          <div>
-            <label className="label" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-          </div>
+          <PasswordField
+            id="password"
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            required
+            disabled={loading}
+          />
           <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
+                  <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" opacity="0.75" />
+                </svg>
+                Signing in…
+              </span>
+            ) : (
+              "Sign in"
+            )}
           </button>
         </form>
+
+        <p className="mt-3 text-center text-sm text-slate-500">
+          <Link href="/forgot-password" className="font-medium text-brand-600 hover:underline">
+            Forgot password?
+          </Link>
+        </p>
 
         <p className="mt-4 text-center text-sm text-slate-500">
           Don&apos;t have an account?{" "}

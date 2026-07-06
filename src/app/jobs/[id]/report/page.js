@@ -277,7 +277,10 @@ export default function ReportPage({ params }) {
         <Band>Coordinate System Information</Band>
         <Fields>
           <Row1 label="Coordinate system name" value={job.coordinateSystemName} />
-          <Row1 label="Created" value={fmtCoordSystemCreated(job.jobCreated, job.createdAt)} />
+          <Row1
+            label="Created"
+            value={job.coordinateSystemCreated || fmtCoordSystemCreated(job.jobCreated, job.createdAt)}
+          />
           <Row1 label="Transformation name" value={job.transformationName} />
           <Row1 label="Transformation type" value={job.transformationType} />
           <Row1 label="Height mode" value={heightMode} />
@@ -645,7 +648,7 @@ function ImageWithFallback({ src }) {
     // original Leica Geo Office field book exactly when no logo is embedded.
     return (
       <div
-        className="absolute right-0 top-0 bg-white"
+        className="absolute right-0 top-[-15px]n"
         style={{ width: 232, height: 86 }}
       >
         <div className="flex items-start" style={{ gap: 6, padding: 6 }}>

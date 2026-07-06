@@ -141,7 +141,6 @@ export default function JobOverviewPage({ params }) {
             <Row label="Posn limit" value={`${job.positionLimit} m`} mono />
             {job.includeHeight && <Row label="Hgt limit" value={`${job.heightLimit} m`} mono />}
             <Row label="Height" value={job.includeHeight ? "Included" : "Not used"} />
-            <Row label="Survey type" value={job.surveyType === "farm" ? "Farm" : "Plot"} />
             <Row label="Min. time diff" value={`${job.minTimeDiffMinutes} min`} mono />
           </dl>
           <Link href={`/jobs/${id}/control`} className="mt-4 inline-block text-sm font-medium text-brand-600">

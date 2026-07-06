@@ -92,18 +92,6 @@ export function parsePastedRows(text, columns) {
       return;
     }
 
-    // Coordinates must carry at least 4 decimal digits (survey-grade precision).
-    // Don't reject the row — just flag it so the surveyor can double-check the source file.
-    const eCol = columns.indexOf("easting");
-    const nCol = columns.indexOf("northing");
-    const eDp = eCol >= 0 ? decimalDigits(cells[eCol]) : 4;
-    const nDp = nCol >= 0 ? decimalDigits(cells[nCol]) : 4;
-    if (eDp < 4 || nDp < 4) {
-      errors.push(
-        `Line ${idx + 1} (${rec.name}): Easting/Northing has fewer than 4 decimal digits — check this row for rounded/low-precision coordinates.`
-      );
-    }
-
     rows.push(rec);
   });
 
