@@ -225,7 +225,7 @@ export default function BulkImport({ jobId, limits, includeHeight, onImported, o
           code: p.code,
           observations: [
             mk(ref1, i * 4, +1),
-            mk(ref2, n * 4 + 15 + i * 4, -1),
+            mk(ref2, i * 4 + 30 + Math.random() * 10, -1),
           ],
         };
       }

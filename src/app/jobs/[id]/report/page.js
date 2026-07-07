@@ -219,21 +219,24 @@ export default function ReportPage({ params }) {
   for (const b of baselines) {
     if (!refOrder.includes(b.o.reference)) refOrder.push(b.o.reference);
   }
-  const isSetup = (b) => b.isReferenceMark || b.isWorkingPoint;
+  const isSetup = (b) => b.isReferenceMark;
   baselines.sort((a, b) => {
-    // Setup measurements always come before the beacons; among them the reference
-    // marks come first, then the working point (measured before the beacons).
+    // Setup measurements (reference marks) always come before the beacons.
     if (isSetup(a) !== isSetup(b)) return isSetup(a) ? -1 : 1;
     if (isSetup(a) && isSetup(b)) {
-      if (!!a.isWorkingPoint !== !!b.isWorkingPoint) return a.isWorkingPoint ? 1 : -1;
       // Tie: keep the CSV's original order (stable sort) — never alphabetical,
       // which would wrongly put "10", "11" before "2".
       return 0;
     }
     // Beacons: group by reference station, then keep the CSV's original order
-    // within each group (stable sort) — not alphabetical.
+    // within each group (stable sort) — not alphabetical. Within a group, the
+    // baseline that established the working point itself (e.g. Reference: A,
+    // Rover: WP1) comes first — it's the shot the rest of that group starts from.
     const d = refOrder.indexOf(a.o.reference) - refOrder.indexOf(b.o.reference);
     if (d !== 0) return d;
+    const aIsWp = !!wpName && a.p.name === wpName;
+    const bIsWp = !!wpName && b.p.name === wpName;
+    if (aIsWp !== bIsWp) return aIsWp ? -1 : 1;
     return 0;
   });
 
@@ -487,8 +490,8 @@ export default function ReportPage({ params }) {
                 {calibrationPoints.map((c) => (
                   <tr key={c._id}>
                     <Td>{c.name}</Td>
-                    <Td className="right mono pr-16">{fmt2z(c.easting)}</Td>
-                    <Td className="right mono pr-16">{fmt2z(c.northing)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.easting, coordDp)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.northing, coordDp)}</Td>
                     <Td className="right mono pr-16">{fmt(c.height, coordDp)}</Td>
                   </tr>
                 ))}
@@ -555,7 +558,7 @@ export default function ReportPage({ params }) {
                       </div>
                     </div>
                     {hasQuality && (
-                      <div className=" pt-1 text-[12px]">
+                      <div className=" pt-1 text-[12px] whitespace-nowrap">
                         <span className="font-normal pl-1">Quality:</span>
                         <span className="num pl-8">Sd. E: {fmt(o.sdE, coordDp)} m</span>
                         <span className="pl-7">
