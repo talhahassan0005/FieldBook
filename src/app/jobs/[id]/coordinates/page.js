@@ -97,7 +97,8 @@ export default function CoordinateListPage({ params }) {
     ["BEACONS", beacons.map((c) => toRow(c, PEG))],
   ].filter(([, rows]) => rows.length > 0);
 
-  const title = `COORDINATE LIST ${job.name || ""}`.trim();
+  // Client: the coordinate-list heading must NOT include the project name.
+  const title = "COORDINATE LIST";
 
   // Build & download a real Excel (.xlsx) file matching the client's sample:
   // a title row, then each section (REFERENCE MARKS — incl. working points — then

@@ -6,7 +6,9 @@ async function request(url, options = {}) {
   // Abort after 25s so the UI never hangs forever on a stuck request
   // (e.g. the database is unreachable).
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  // Allow enough time for a large bulk import and/or an Atlas cold-start wake-up
+  // (was 25s, which large imports could overrun and look like a DB outage).
+  const timeout = setTimeout(() => controller.abort(), 120000);
   try {
     res = await fetch(url, {
       headers: { "Content-Type": "application/json" },

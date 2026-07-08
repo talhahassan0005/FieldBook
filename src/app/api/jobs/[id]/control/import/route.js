@@ -40,9 +40,18 @@ export async function POST(request, { params }) {
     let updated = 0;
     const skipped = [];
 
+    // Flush in ONE bulk round-trip each (insertMany / bulkWrite) instead of an
+    // await per point — hundreds of sequential round-trips to Atlas were what
+    // made large imports look like a database timeout.
+    const toInsert = [];
+    const updateOps = [];
+    const seen = new Set();
+
     for (const p of points) {
       if (!p.name || !String(p.name).trim()) continue;
       const name = String(p.name).trim();
+      if (seen.has(name)) continue;
+      seen.add(name);
       const doc = {
         code: p.code || "",
         pointType: p.pointType || "Position",
@@ -63,16 +72,18 @@ export async function POST(request, { params }) {
           skipped.push(name);
           continue;
         }
-        await ControlPoint.findOneAndUpdate({ job: id, name }, doc);
+        updateOps.push({ updateOne: { filter: { job: id, name }, update: { $set: doc } } });
         updated++;
       } else {
         // Preserves the order points appear in the CSV — NOT alphabetical
         // (so "1, 2, 3, ..., 10, 11" stays in that order, never "1, 10, 11, 2").
-        await ControlPoint.create({ job: id, name, ...doc, sortOrder: nextSortOrder++ });
-        existingNames.add(name);
+        toInsert.push({ job: id, name, ...doc, sortOrder: nextSortOrder++ });
         created++;
       }
     }
+
+    if (toInsert.length) await ControlPoint.insertMany(toInsert, { ordered: false });
+    if (updateOps.length) await ControlPoint.bulkWrite(updateOps, { ordered: false });
 
     // A point name belongs to either control or survey — not both. Remove any
     // survey point that is now being (re)imported as a control point (e.g. the

@@ -55,6 +55,10 @@ export default function JobForm({ initial, jobId }) {
   // format is always consistent (client requirement); combined into
   // form.jobCreated as "DD/MM/YYYY HH:MM:SS".
   const [dt, setDt] = useState(() => parseDateParts(initial?.jobCreated));
+  // Calibration "Created" uses the SAME six DD/MM/YYYY HH:MM:SS boxes as Job
+  // Created (client: "choose and adopt 1 format") — combined into
+  // form.coordinateSystemCreated as "DD/MM/YYYY HH:MM:SS".
+  const [dtCs, setDtCs] = useState(() => partsFromAny(initial?.coordinateSystemCreated));
 
   useEffect(() => {
     api
@@ -80,6 +84,7 @@ export default function JobForm({ initial, jobId }) {
   // Plot (small site) vs farm (large site) sets which minimum time gap is
   // (transformation + metadata) — "entered once per system, reused by every job".
   function applyCoordSystem(sys) {
+    if (sys.coordinateSystemCreated) setDtCs(partsFromAny(sys.coordinateSystemCreated));
     setForm((f) => ({
       ...f,
       coordinateSystemName: sys.coordinateSystemName ?? f.coordinateSystemName,
@@ -122,16 +127,18 @@ export default function JobForm({ initial, jobId }) {
     if (match) applyCoordSystem(match);
   }
   // Job "Created" (when the machine was set up on site). Auto-default the
-  // coordinate-system "Created" to ~1h15m later, same date (client's request),
-  // unless the user already set it or a saved system supplied it.
+  // coordinate-system (calibration) "Created" to ~1h30m EARLIER — the client
+  // requires the calibration time to be older than the project creation time by
+  // more than 1 hour — unless the user already set it or a saved system did.
   function setJobCreated(v) {
     setForm((f) => {
       const next = { ...f, jobCreated: v };
       if (!f.coordinateSystemCreated) {
         const d = parseDateTime(v);
         if (d) {
-          d.setMinutes(d.getMinutes() + 75);
+          d.setMinutes(d.getMinutes() - 90);
           next.coordinateSystemCreated = fmtDateTime(d);
+          setDtCs(partsFromAny(next.coordinateSystemCreated));
         }
       }
       return next;
@@ -144,6 +151,14 @@ export default function JobForm({ initial, jobId }) {
     const next = { ...dt, [key]: cleaned };
     setDt(next);
     setJobCreated(combineDateParts(next));
+  }
+  // Same six-box editor for the calibration "Created" — kept in its own
+  // form.coordinateSystemCreated as "DD/MM/YYYY HH:MM:SS".
+  function setDtCsPart(key, value) {
+    const cleaned = value.replace(/\D/g, "").slice(0, key === "yyyy" ? 4 : 2);
+    const next = { ...dtCs, [key]: cleaned };
+    setDtCs(next);
+    set("coordinateSystemCreated", combineDateParts(next));
   }
   // When a SAVED coordinate system is selected, its calibration is fixed — lock
   // the transformation fields (only projection stays editable). A new/unknown
@@ -170,6 +185,22 @@ export default function JobForm({ initial, jobId }) {
     const dtErr = dateTimeError(dt);
     if (dtErr) {
       setError(dtErr);
+      return;
+    }
+    // Client rule — the system must REFUSE when the calibration time is not older
+    // than the project creation time by more than 1 hour. (The report then also
+    // derives the mean-coordinate observation times to sit ≥1h30m before this.)
+    const csErr = dateTimeError(dtCs);
+    if (csErr) {
+      setError("Calibration (Coordinate System) created: " + csErr);
+      return;
+    }
+    const tJob = parseDateTime(combineDateParts(dt));
+    const tCal = parseDateTime(combineDateParts(dtCs));
+    if (tJob && tCal && !(tJob.getTime() - tCal.getTime() > 60 * 60000)) {
+      setError(
+        "Calibration time must be OLDER than the Job Created time by more than 1 hour. Adjust the Created (Coordinate System) date/time."
+      );
       return;
     }
     setSaving(true);
@@ -294,14 +325,25 @@ export default function JobForm({ initial, jobId }) {
               ))}
             </datalist>
           </Field>
-          <Field label="Created (Coordinate System)">
-            <input
-              className="input"
-              type="datetime-local"
-              value={form.coordinateSystemCreated}
-              onChange={(e) => set("coordinateSystemCreated", e.target.value)}
-            />
-          </Field>
+          <div className="sm:col-span-2">
+            <label className="label">Created (Coordinate System)</label>
+            <div className="flex flex-wrap items-end gap-1.5">
+              <DtBox label="DD" value={dtCs.dd} onChange={(v) => setDtCsPart("dd", v)} max={2} w="w-12" ph="07" />
+              <span className="pb-2 text-slate-400">/</span>
+              <DtBox label="MM" value={dtCs.mm} onChange={(v) => setDtCsPart("mm", v)} max={2} w="w-12" ph="06" />
+              <span className="pb-2 text-slate-400">/</span>
+              <DtBox label="YYYY" value={dtCs.yyyy} onChange={(v) => setDtCsPart("yyyy", v)} max={4} w="w-16" ph="2026" />
+              <span className="px-2" />
+              <DtBox label="Hrs" value={dtCs.hh} onChange={(v) => setDtCsPart("hh", v)} max={2} w="w-12" ph="09" />
+              <span className="pb-2 text-slate-400">:</span>
+              <DtBox label="Min" value={dtCs.mi} onChange={(v) => setDtCsPart("mi", v)} max={2} w="w-12" ph="21" />
+              <span className="pb-2 text-slate-400">:</span>
+              <DtBox label="Sec" value={dtCs.ss} onChange={(v) => setDtCsPart("ss", v)} max={2} w="w-12" ph="00" />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour). Must be at least 1 hour older than Job Created.
+            </p>
+          </div>
         </div>
 
         {/*
@@ -454,6 +496,23 @@ function parseDateTime(s) {
 function fmtDateTime(d) {
   const p = (x) => String(x).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// Build the six editable parts from a stored value in EITHER supported format —
+// "DD/MM/YYYY HH:MM:SS" or a native datetime-local "YYYY-MM-DDTHH:MM" (older
+// jobs) — so the calibration boxes populate correctly regardless of origin.
+function partsFromAny(s) {
+  const d = parseDateTime(s);
+  if (!d) return { dd: "", mm: "", yyyy: "", hh: "", mi: "", ss: "" };
+  const p = (x) => String(x).padStart(2, "0");
+  return {
+    dd: p(d.getDate()),
+    mm: p(d.getMonth() + 1),
+    yyyy: String(d.getFullYear()),
+    hh: p(d.getHours()),
+    mi: p(d.getMinutes()),
+    ss: p(d.getSeconds()),
+  };
 }
 
 // Split a stored "DD/MM/YYYY HH:MM:SS" string into the six editable parts.

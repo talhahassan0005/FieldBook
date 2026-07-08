@@ -41,9 +41,21 @@ export async function POST(request, { params }) {
     let updated = 0;
     const skipped = [];
 
+    // Build the work in memory, then flush in ONE bulk round-trip each. Doing an
+    // individual await per point (589 sequential inserts) is what made large
+    // imports appear to "time out" against Atlas — it was the network latency of
+    // hundreds of round-trips, not the cluster being down. insertMany / bulkWrite
+    // collapse that to a couple of round-trips.
+    const toInsert = [];
+    const updateOps = [];
+    const seen = new Set();
+
     for (const p of points) {
       if (!p.name || !String(p.name).trim()) continue;
       const name = String(p.name).trim();
+      // Guard against the same name appearing twice within one import payload.
+      if (seen.has(name)) continue;
+      seen.add(name);
       const computed = computeSurveyPoint(p.observations || [], limits);
 
       if (existingNames.has(name)) {
@@ -51,13 +63,15 @@ export async function POST(request, { params }) {
           skipped.push(name);
           continue;
         }
-        await SurveyPoint.findOneAndUpdate(
-          { job: id, name },
-          { code: p.code || "", observations: p.observations || [], computed }
-        );
+        updateOps.push({
+          updateOne: {
+            filter: { job: id, name },
+            update: { $set: { code: p.code || "", observations: p.observations || [], computed } },
+          },
+        });
         updated++;
       } else {
-        await SurveyPoint.create({
+        toInsert.push({
           job: id,
           name,
           code: p.code || "",
@@ -67,10 +81,12 @@ export async function POST(request, { params }) {
           // (so "1, 2, 3, ..., 10, 11" stays in that order, never "1, 10, 11, 2").
           sortOrder: nextSortOrder++,
         });
-        existingNames.add(name);
         created++;
       }
     }
+
+    if (toInsert.length) await SurveyPoint.insertMany(toInsert, { ordered: false });
+    if (updateOps.length) await SurveyPoint.bulkWrite(updateOps, { ordered: false });
 
     // A point name belongs to either survey or control — not both. Remove any
     // control point that is now being (re)imported as a survey point, so the

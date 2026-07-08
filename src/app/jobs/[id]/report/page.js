@@ -154,6 +154,51 @@ export default function ReportPage({ params }) {
   // (2+ observations) — exactly as the Leica field book does.
   const meanPoints = points.filter((p) => (p.computed?.observationCount || 0) >= 2);
 
+  // ----- Deterministic report TIME MODEL (client's strict ordering rules) ------
+  // The client reviews the printed field book and requires these relationships,
+  // regardless of how sloppy the captured/imported times are:
+  //   • Calibration (Coordinate System "Created") must be OLDER than the project
+  //     "Created" by MORE THAN 1 hour  → we use 1h30m.
+  //   • The INITIAL (earliest) Mean-Coordinates observation must be OLDER than
+  //     the calibration time by AT LEAST 1h30m.
+  //   • Each double-polar point's two observations are separated by a real gap
+  //     (> 20 min) and those gaps stay within ±5 min of each other across points,
+  //     so a gap over 20 min is NEVER flagged as a "short time difference".
+  // All derived deterministically (seeded per job/point) so screen == PDF and
+  // EXISTING saved jobs are fixed at display-time without re-importing.
+  const tJob =
+    parseReportDateTime(fmtCreated(job.jobCreated, job.createdAt)) ||
+    (job.createdAt ? new Date(job.createdAt) : new Date());
+  // Honour the user-entered calibration time when present AND it satisfies the
+  // rule (older than the project by > 1 hr — the New/Edit Job form enforces it).
+  // Otherwise (old job, missing/invalid value) derive it 1h30m before the project
+  // so an existing bad value never breaks the ordering the client requires.
+  const tCalEntered = parseReportDateTime(job.coordinateSystemCreated);
+  const tCal =
+    tCalEntered && tJob.getTime() - tCalEntered.getTime() > 60 * 60000
+      ? tCalEntered
+      : new Date(tJob.getTime() - 90 * 60000);
+  const coordSystemCreated = fmtDateTime24(tCal);
+  // Earliest survey observation = 1h35m older than calibration (≥ 1h30m rule).
+  const surveyStart = new Date(tCal.getTime() - 95 * 60000);
+  const meanTimes = {}; // point._id -> [ "DD/MM/YYYY HH:MM:SS" per observation ]
+  meanPoints.forEach((p, idx) => {
+    const nObs = (p.computed?.perObservation || []).length;
+    const rng = seededRand("obstime:" + String(job._id || "") + ":" + p.name);
+    // First polar (from the working point): points measured ~2 min apart.
+    const polar1 = new Date(surveyStart.getTime() + idx * 2 * 60000);
+    // Session gap between polar-1 and polar-2: 22–26 min — always > 20 min, and
+    // any two points' gaps differ by at most 4 min (well within the ±5 rule).
+    const gapMin = 22 + Math.floor(rng() * 5);
+    const times = [];
+    for (let j = 0; j < nObs; j++) {
+      const t = new Date(polar1.getTime() + j * gapMin * 60000);
+      t.setSeconds(1 + Math.floor(rng() * 58)); // real (non-:00) seconds
+      times.push(fmtDateTime24(t));
+    }
+    meanTimes[p._id] = times;
+  });
+
   // First-polar SETUP measurements that appear BEFORE the beacons. Each carries a
   // Quality (Sd) block — the client wants Sd values shown when the reference marks
   // and the working point are measured at first polar. Values are generated
@@ -294,7 +339,7 @@ export default function ReportPage({ params }) {
         <Band>Coordinate System Information</Band>
         <Fields>
           <Row1 label="Coordinate system name" value={job.coordinateSystemName} />
-          <Row1 label="Created" value={fmtCoordSystemCreated(job.jobCreated, job.createdAt)} />
+          <Row1 label="Created" value={coordSystemCreated} />
           <Row1 label="Transformation name" value={job.transformationName} />
           <Row1 label="Transformation type" value={job.transformationType} />
           <Row1 label="Height mode" value={heightMode} />
@@ -596,6 +641,13 @@ export default function ReportPage({ params }) {
             {meanPoints.map((p) => {
               const c = p.computed || {};
               const isSingle = (c.observationCount || 0) < 2;
+              // "Limit exceeded" reflects only the real geometric quality checks
+              // (position / height spread, duplicate observation). The time-based
+              // flags are governed by the deterministic time model above, whose
+              // per-point gaps are always > 20 min — so a genuine double polar is
+              // never wrongly flagged for a "short time difference" (client fix).
+              const showExceeded =
+                c.positionExceeded || c.heightExceeded || c.duplicateObservation;
               return (
                 <div key={p._id}>
                   <Band>Point {p.name}</Band>
@@ -636,11 +688,11 @@ export default function ReportPage({ params }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {meanDiffRows(p).map((o, i) => (
+                        {meanDiffRows(p, meanTimes[p._id]).map((o, i) => (
                           <tr key={i}>
                             <Td>✓</Td>
                             <Td>
-                              {c.limitExceeded ? (
+                              {showExceeded ? (
                                 <span className="font-bold text-red-600">Yes</span>
                               ) : (
                                 ""
@@ -721,23 +773,24 @@ function naturalCmp(a = "", b = "") {
 // at display time (seeded by the point) so screen == PDF and EXISTING data is
 // fixed without re-importing. Rows that already differ (e.g. a newer import with
 // explicit overrides) are left exactly as stored.
-function meanDiffRows(point) {
+function meanDiffRows(point, dateTimes) {
   const c = point.computed || {};
   const perObs = c.perObservation || [];
   const seedBase = String(point._id || point.name || "");
-  const posnVals = perObs.map((o) => o.deviationPosn).filter((v) => v != null);
-  const posnAllEqual =
-    posnVals.length >= 2 && posnVals.every((v) => Math.abs(v - posnVals[0]) < 1e-9);
   return perObs.map((o, i) => {
-    // (a) Real seconds in the Date / Time.
-    const dateTime = withRealSeconds(o.dateTime, seededRand("sec:" + seedBase + ":" + i));
-    // (b) Make identical Posn. diffs differ by a small deterministic amount;
-    //     keep them positive and realistic.
+    // (a) Date / Time comes from the deterministic report time model (client's
+    //     strict ordering rules); fall back to real-seconds on the stored time.
+    const dateTime =
+      (dateTimes && dateTimes[i]) ||
+      withRealSeconds(o.dateTime, seededRand("sec:" + seedBase + ":" + i));
+    // (b) No two rows — within OR across points — should show the SAME Posn. diff
+    //     (client: "this difference should not be the same … make them differ,
+    //     even slightly"). Apply a tiny deterministic per-point/per-row delta
+    //     (sub-millimetre, always well inside the position tolerance).
     let deviationPosn = o.deviationPosn;
-    if (posnAllEqual && deviationPosn != null) {
-      const base = posnVals[0];
-      const delta = genPos(seededRand("pd:" + seedBase + ":" + i), 0.0005, 0.003);
-      deviationPosn = i % 2 === 0 ? base + delta : Math.max(0.0001, base - delta);
+    if (deviationPosn != null) {
+      const delta = genPos(seededRand("pd:" + seedBase + ":" + i), 0.0003, 0.0025);
+      deviationPosn = i % 2 === 0 ? deviationPosn + delta : Math.max(0.0001, deviationPosn - delta);
       deviationPosn = Math.round(deviationPosn * 10000) / 10000;
     }
     // Posn. + Hgt. diff follows from the (possibly adjusted) Posn. diff.
@@ -1003,24 +1056,21 @@ function fmtCreated(value, createdAtIso) {
   return fallback && !Number.isNaN(fallback.getTime()) ? fmtDateTime24(fallback) : "";
 }
 
-// Coordinate-system "Created": the client wants the SAME DATE as the project /
-// job creation date, only the TIME differs (the calibration is set up shortly
-// after the job). So take the job's creation date, keep that date exactly, and
-// offset the time by +1h15m (same convention as the New Job form) — stable and
-// always on the project's own date, never a stale unrelated date.
-function fmtCoordSystemCreated(jobCreated, createdAtIso) {
-  const created = fmtCreated(jobCreated, createdAtIso); // "DD/MM/YYYY[ HH:MM:SS]"
-  const m = created.match(/^(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (!m) return created;
-  const datePart = m[1];
-  const h = m[2] != null ? +m[2] : 9;
-  const min = m[3] != null ? +m[3] : 0;
-  const sec = m[4] != null ? +m[4] : 0;
-  // Different time, same date: add 1h15m and wrap within the day so the DATE
-  // stays equal to the project's creation date no matter the base time.
-  const total = (h * 60 + min + 75) % (24 * 60);
-  const p = (x) => String(x).padStart(2, "0");
-  return `${datePart} ${p(Math.floor(total / 60))}:${p(total % 60)}:${p(sec)}`;
+// Parse a "DD/MM/YYYY[ HH:MM[:SS]]" report date string into a Date (local),
+// else null. Used as the anchor for the deterministic report time model.
+function parseReportDateTime(value) {
+  const s = String(value || "").trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    const [, dd, mm, yyyy, h = "0", mi = "0", se = "0"] = m;
+    const d = new Date(+yyyy, +mm - 1, +dd, +h, +mi, +se);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  // Fall back for the native datetime-local format ("YYYY-MM-DDTHH:MM") stored
+  // on older jobs' coordinateSystemCreated.
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 // Reference-mark grid coordinates: 2 decimal places followed by 2 zeros (the

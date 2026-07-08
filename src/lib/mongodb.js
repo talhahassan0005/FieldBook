@@ -30,12 +30,21 @@ export default async function dbConnect() {
   if (!cached.promise) {
     cached.promise = mongoose
       .connect(MONGODB_URI, {
-        bufferCommands: false,
-        // Fail fast with a clear error instead of hanging ~30s when the Atlas
-        // cluster is paused or the IP isn't allowlisted.
-        serverSelectionTimeoutMS: 8000,
-        connectTimeoutMS: 8000,
-        socketTimeoutMS: 20000,
+        // Buffer commands so a request that arrives while the (shared/Atlas)
+        // cluster is still waking waits for the connection instead of throwing
+        // immediately — the usual cause of the intermittent "database isn't
+        // responding" even though the cluster is up and the IP is allowed.
+        bufferCommands: true,
+        // Give a paused/idle shared cluster enough time to wake on the first
+        // request (Atlas cold-start can take well over 8s) instead of failing fast.
+        serverSelectionTimeoutMS: 30000,
+        connectTimeoutMS: 30000,
+        // Long enough for a large bulk import to complete on one socket.
+        socketTimeoutMS: 120000,
+        // Keep a small warm pool across serverless invocations.
+        maxPoolSize: 10,
+        minPoolSize: 1,
+        retryWrites: true,
       })
       .then((m) => {
         // Invalidate the cache on a runtime disconnect so the next call reconnects.
