@@ -48,23 +48,25 @@ export default function JobForm({ initial, jobId }) {
   // opens with valid, rule-satisfying dates already in place; the user only has
   // to touch a box if the real date/time differs).
   const isNewJob = !jobId && !initial?.jobCreated;
+  // Computed once (not per-hook) so dt / dtCs / form all agree on the exact
+  // same instant — calling `new Date()` separately in each initializer could
+  // drift by a second between them.
+  const defaultJobParts = isNewJob ? fiveDaysAgoParts() : null;
+  const defaultCalParts = isNewJob ? deriveCalibrationParts(defaultJobParts) : null;
+
   const [dt, setDt] = useState(() =>
-    initial?.jobCreated ? parseDateParts(initial.jobCreated) : isNewJob ? fiveDaysAgoParts() : emptyParts()
+    initial?.jobCreated ? parseDateParts(initial.jobCreated) : isNewJob ? defaultJobParts : emptyParts()
   );
   // Calibration "Created" uses the SAME six DD/MM/YYYY HH:MM:SS boxes as Job
   // Created (client: "choose and adopt 1 format") — combined into
   // form.coordinateSystemCreated as "DD/MM/YYYY HH:MM:SS".
   const [dtCs, setDtCs] = useState(() =>
-    initial?.coordinateSystemCreated
-      ? partsFromAny(initial.coordinateSystemCreated)
-      : isNewJob
-        ? deriveCalibrationParts(fiveDaysAgoParts())
-        : emptyParts()
+    initial?.coordinateSystemCreated ? partsFromAny(initial.coordinateSystemCreated) : isNewJob ? defaultCalParts : emptyParts()
   );
   const [form, setForm] = useState({
     ...EMPTY,
     ...initial,
-    ...(isNewJob ? { jobCreated: combineDateParts(fiveDaysAgoParts()), coordinateSystemCreated: combineDateParts(deriveCalibrationParts(fiveDaysAgoParts())) } : {}),
+    ...(isNewJob ? { jobCreated: combineDateParts(defaultJobParts), coordinateSystemCreated: combineDateParts(defaultCalParts) } : {}),
     transformation: { ...EMPTY.transformation, ...(initial?.transformation || {}) },
     heightTransformation: { ...EMPTY.heightTransformation, ...(initial?.heightTransformation || {}) },
   });
