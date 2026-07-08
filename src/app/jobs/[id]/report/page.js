@@ -5,7 +5,7 @@ import { useEffect, useState, use } from "react";
 import Spinner from "@/components/Spinner";
 import BackButton from "@/components/BackButton";
 import { api } from "@/lib/api";
-import { fmt, positionQuality } from "@/lib/survey";
+import { fmt, positionQuality, CALIBRATION_MIN_GAP_MS } from "@/lib/survey";
 
 export default function ReportPage({ params }) {
   const { id } = use(params);
@@ -61,16 +61,22 @@ export default function ReportPage({ params }) {
   if (!job) return null;
 
   // ---- Client rule enforcement (REFUSE, don't silently mask) ------------------
-  // "Calibration time must ALWAYS be older than project creation time by MORE
-  // THAN 1 hour." If a saved job stores a calibration time that violates this,
-  // the system REFUSES to produce the report — the job must be corrected in Edit
-  // Job. Jobs with NO stored calibration are exempt (the report derives a
-  // compliant value), so existing/legacy jobs still open.
+  // "Calibration time must ALWAYS be older than project creation time by more
+  // than 1h 13m 34s" (CALIBRATION_MIN_GAP_MS). If a saved job stores a
+  // calibration time that violates this, the system REFUSES to produce the
+  // report — the job must be corrected in Edit Job. Jobs with NO stored
+  // calibration are exempt (the report derives a compliant value), so
+  // existing/legacy jobs still open.
   {
     const jt = parseReportDateTime(fmtCreated(job.jobCreated, job.createdAt));
     const ct = parseReportDateTime(job.coordinateSystemCreated);
-    if (jt && ct && !(jt.getTime() - ct.getTime() > 60 * 60000)) {
-      const diffMin = Math.round((jt.getTime() - ct.getTime()) / 60000);
+    if (jt && ct && !(jt.getTime() - ct.getTime() > CALIBRATION_MIN_GAP_MS)) {
+      const diffSec = Math.round((jt.getTime() - ct.getTime()) / 1000);
+      const fmtGap = (s) => {
+        const sign = s < 0 ? "-" : "";
+        s = Math.abs(s);
+        return `${sign}${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`;
+      };
       return (
         <div className="mx-auto max-w-3xl">
           <BackButton label="Back" />
@@ -78,15 +84,14 @@ export default function ReportPage({ params }) {
             <p className="font-bold">Report refused — calibration time rule not met.</p>
             <p className="mt-2">
               The calibration (Coordinate System “Created”) must be OLDER than the project
-              (Job “Created”) by <strong>more than 1&nbsp;hour</strong>.
+              (Job “Created”) by <strong>more than 1h 13m 34s</strong>.
             </p>
             <ul className="mt-2 list-disc pl-5">
               <li>Job created: <span className="num">{fmtCreated(job.jobCreated, job.createdAt)}</span></li>
               <li>Calibration created: <span className="num">{job.coordinateSystemCreated || "—"}</span></li>
               <li>
-                Current gap:{" "}
-                <span className="num">{diffMin} min</span>{" "}
-                {diffMin <= 0 ? "(calibration is NOT older than the job)" : "(must be more than 60 min)"}
+                Current gap: <span className="num">{fmtGap(diffSec)}</span>{" "}
+                {diffSec <= 0 ? "(calibration is NOT older than the job)" : "(must be more than 1h 13m 34s)"}
               </li>
             </ul>
             <p className="mt-2">
@@ -208,14 +213,15 @@ export default function ReportPage({ params }) {
     parseReportDateTime(fmtCreated(job.jobCreated, job.createdAt)) ||
     (job.createdAt ? new Date(job.createdAt) : new Date());
   // Honour the user-entered calibration time when present AND it satisfies the
-  // rule (older than the project by > 1 hr — the New/Edit Job form enforces it).
-  // Otherwise (old job, missing/invalid value) derive it 1h30m before the project
-  // so an existing bad value never breaks the ordering the client requires.
+  // rule (older than the project by more than CALIBRATION_MIN_GAP_MS — the
+  // refuse-guard above already re-validates this, and the New/Edit Job form
+  // enforces it on save). Otherwise (old job, missing/invalid value) derive it
+  // 1h35m before the project so a bad legacy value never breaks the ordering.
   const tCalEntered = parseReportDateTime(job.coordinateSystemCreated);
   const tCal =
-    tCalEntered && tJob.getTime() - tCalEntered.getTime() > 60 * 60000
+    tCalEntered && tJob.getTime() - tCalEntered.getTime() > CALIBRATION_MIN_GAP_MS
       ? tCalEntered
-      : new Date(tJob.getTime() - 90 * 60000);
+      : new Date(tJob.getTime() - 95 * 60000);
   const coordSystemCreated = fmtDateTime24(tCal);
   // ALL survey observations must sit BEFORE the calibration time, with the
   // earliest ≥ 1h30m before it — no matter how many points the job has. We stagger

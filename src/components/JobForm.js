@@ -4,6 +4,7 @@ import { useState, useEffect, useId, isValidElement, cloneElement } from "react"
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { CALIBRATION_MIN_GAP_MS } from "@/lib/survey";
 
 const LO_OPTIONS = ["LO15", "LO17", "LO19", "LO21", "LO23", "LO25", "LO27", "LO29", "LO31", "LO33"];
 
@@ -41,9 +42,29 @@ const EMPTY = {
 export default function JobForm({ initial, jobId }) {
   const router = useRouter();
   const toast = useToast();
+  // On a brand-new job (no jobId, nothing saved yet), pre-fill Job Created to 5
+  // days before today and Calibration Created to the SAME DATE (client: "this
+  // will help in a case where the user forgets to change time" — every new job
+  // opens with valid, rule-satisfying dates already in place; the user only has
+  // to touch a box if the real date/time differs).
+  const isNewJob = !jobId && !initial?.jobCreated;
+  const [dt, setDt] = useState(() =>
+    initial?.jobCreated ? parseDateParts(initial.jobCreated) : isNewJob ? fiveDaysAgoParts() : emptyParts()
+  );
+  // Calibration "Created" uses the SAME six DD/MM/YYYY HH:MM:SS boxes as Job
+  // Created (client: "choose and adopt 1 format") — combined into
+  // form.coordinateSystemCreated as "DD/MM/YYYY HH:MM:SS".
+  const [dtCs, setDtCs] = useState(() =>
+    initial?.coordinateSystemCreated
+      ? partsFromAny(initial.coordinateSystemCreated)
+      : isNewJob
+        ? deriveCalibrationParts(fiveDaysAgoParts())
+        : emptyParts()
+  );
   const [form, setForm] = useState({
     ...EMPTY,
     ...initial,
+    ...(isNewJob ? { jobCreated: combineDateParts(fiveDaysAgoParts()), coordinateSystemCreated: combineDateParts(deriveCalibrationParts(fiveDaysAgoParts())) } : {}),
     transformation: { ...EMPTY.transformation, ...(initial?.transformation || {}) },
     heightTransformation: { ...EMPTY.heightTransformation, ...(initial?.heightTransformation || {}) },
   });
@@ -51,14 +72,10 @@ export default function JobForm({ initial, jobId }) {
   const [error, setError] = useState("");
   // Reusable coordinate systems (calibration entered once per system, reused).
   const [coordSystems, setCoordSystems] = useState([]);
-  // Job "Created" entered as separate Day/Month/Year Hours/Min/Sec boxes so the
-  // format is always consistent (client requirement); combined into
-  // form.jobCreated as "DD/MM/YYYY HH:MM:SS".
-  const [dt, setDt] = useState(() => parseDateParts(initial?.jobCreated));
-  // Calibration "Created" uses the SAME six DD/MM/YYYY HH:MM:SS boxes as Job
-  // Created (client: "choose and adopt 1 format") — combined into
-  // form.coordinateSystemCreated as "DD/MM/YYYY HH:MM:SS".
-  const [dtCs, setDtCs] = useState(() => partsFromAny(initial?.coordinateSystemCreated));
+  // True once the user (or a picked saved system) has explicitly set the
+  // calibration "Created" — after that, editing Job Created no longer
+  // auto-follows it (the user's own value wins).
+  const [calibrationTouched, setCalibrationTouched] = useState(false);
 
   useEffect(() => {
     api
@@ -70,7 +87,10 @@ export default function JobForm({ initial, jobId }) {
         // so it's pre-filled (the surveyor can switch it via the dropdown).
         // Existing jobs keep their own saved values.
         if (!jobId && systems.length > 0 && !initial?.coordinateSystemName) {
-          applyCoordSystem(systems[0]);
+          // Keep the fresh "same date as Job Created" default (below) rather than
+          // overwriting it with the reused system's OWN (unrelated, older) Created
+          // date/time — only its calibration numbers (dE, dN, rotation…) are reused.
+          applyCoordSystem(systems[0], { preserveCreated: true });
         }
       })
       .catch(() => {});
@@ -83,14 +103,17 @@ export default function JobForm({ initial, jobId }) {
 
   // Plot (small site) vs farm (large site) sets which minimum time gap is
   // (transformation + metadata) — "entered once per system, reused by every job".
-  function applyCoordSystem(sys) {
-    if (sys.coordinateSystemCreated) setDtCs(partsFromAny(sys.coordinateSystemCreated));
+  function applyCoordSystem(sys, { preserveCreated = false } = {}) {
+    if (!preserveCreated) {
+      setCalibrationTouched(true);
+      if (sys.coordinateSystemCreated) setDtCs(partsFromAny(sys.coordinateSystemCreated));
+    }
     setForm((f) => ({
       ...f,
       coordinateSystemName: sys.coordinateSystemName ?? f.coordinateSystemName,
       transformationName: sys.transformationName || sys.coordinateSystemName || "",
       transformationType: sys.transformationType || "Twostep",
-      coordinateSystemCreated: sys.coordinateSystemCreated ?? "",
+      coordinateSystemCreated: preserveCreated ? f.coordinateSystemCreated : (sys.coordinateSystemCreated ?? ""),
       heightMode: sys.heightMode ?? "",
       preTransformationName: sys.preTransformationName ?? "",
       residualsFormula: sys.residualsFormula ?? "",
@@ -126,19 +149,20 @@ export default function JobForm({ initial, jobId }) {
     );
     if (match) applyCoordSystem(match);
   }
-  // Job "Created" (when the machine was set up on site). Auto-default the
-  // coordinate-system (calibration) "Created" to ~1h30m EARLIER — the client
-  // requires the calibration time to be older than the project creation time by
-  // more than 1 hour — unless the user already set it or a saved system did.
+  // Job "Created" (when the machine was set up on site). Auto-follow the
+  // coordinate-system (calibration) "Created" to the SAME DATE, ~1h35m earlier
+  // (client: "pre set the date of calibration to be the same as project
+  // created") — unless the user (or a picked saved system) has already set
+  // their own calibration date/time, which then takes precedence.
   function setJobCreated(v) {
     setForm((f) => {
       const next = { ...f, jobCreated: v };
-      if (!f.coordinateSystemCreated) {
-        const d = parseDateTime(v);
-        if (d) {
-          d.setMinutes(d.getMinutes() - 90);
-          next.coordinateSystemCreated = fmtDateTime(d);
-          setDtCs(partsFromAny(next.coordinateSystemCreated));
+      if (!calibrationTouched) {
+        const jobParts = parseDateParts(v);
+        if (jobParts.dd) {
+          const calParts = deriveCalibrationParts(jobParts);
+          next.coordinateSystemCreated = combineDateParts(calParts);
+          setDtCs(calParts);
         }
       }
       return next;
@@ -158,6 +182,7 @@ export default function JobForm({ initial, jobId }) {
     const cleaned = value.replace(/\D/g, "").slice(0, key === "yyyy" ? 4 : 2);
     const next = { ...dtCs, [key]: cleaned };
     setDtCs(next);
+    setCalibrationTouched(true);
     set("coordinateSystemCreated", combineDateParts(next));
   }
   // When a SAVED coordinate system is selected, its calibration is fixed — lock
@@ -188,8 +213,7 @@ export default function JobForm({ initial, jobId }) {
       return;
     }
     // Client rule — the system must REFUSE when the calibration time is not older
-    // than the project creation time by more than 1 hour. (The report then also
-    // derives the mean-coordinate observation times to sit ≥1h30m before this.)
+    // than the project creation time by more than 1h13m34s (CALIBRATION_MIN_GAP_MS).
     const csErr = dateTimeError(dtCs);
     if (csErr) {
       setError("Calibration (Coordinate System) created: " + csErr);
@@ -197,9 +221,9 @@ export default function JobForm({ initial, jobId }) {
     }
     const tJob = parseDateTime(combineDateParts(dt));
     const tCal = parseDateTime(combineDateParts(dtCs));
-    if (tJob && tCal && !(tJob.getTime() - tCal.getTime() > 60 * 60000)) {
+    if (tJob && tCal && !(tJob.getTime() - tCal.getTime() > CALIBRATION_MIN_GAP_MS)) {
       setError(
-        "Calibration time must be OLDER than the Job Created time by more than 1 hour. Adjust the Created (Coordinate System) date/time."
+        "Calibration time must be OLDER than the Job Created time by more than 1h 13m 34s. Adjust the Created (Coordinate System) date/time."
       );
       return;
     }
@@ -341,7 +365,7 @@ export default function JobForm({ initial, jobId }) {
               <DtBox label="Sec" value={dtCs.ss} onChange={(v) => setDtCsPart("ss", v)} max={2} w="w-12" ph="00" />
             </div>
             <p className="mt-1 text-[11px] text-slate-400">
-              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour). Must be at least 1 hour older than Job Created.
+              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour).
             </p>
           </div>
         </div>
@@ -512,6 +536,38 @@ function partsFromAny(s) {
     hh: p(d.getHours()),
     mi: p(d.getMinutes()),
     ss: p(d.getSeconds()),
+  };
+}
+
+function emptyParts() {
+  return { dd: "", mm: "", yyyy: "", hh: "", mi: "", ss: "" };
+}
+
+// Six-part date/time 5 days before today (client default for a brand-new Job
+// Created, so the boxes are never left blank / accidentally "today").
+function fiveDaysAgoParts() {
+  const d = new Date();
+  d.setDate(d.getDate() - 5);
+  const p = (x) => String(x).padStart(2, "0");
+  return { dd: p(d.getDate()), mm: p(d.getMonth() + 1), yyyy: String(d.getFullYear()), hh: p(d.getHours()), mi: p(d.getMinutes()), ss: p(d.getSeconds()) };
+}
+
+// Default Calibration Created from Job Created parts: SAME DATE (client: "pre
+// set the date of calibration to be the same as project created"), time pushed
+// back ~1h35m (comfortably over CALIBRATION_MIN_GAP_MS) but clamped to not
+// underflow past midnight into the previous day.
+function deriveCalibrationParts(jobParts) {
+  const totalSec = (+jobParts.hh || 0) * 3600 + (+jobParts.mi || 0) * 60 + (+jobParts.ss || 0);
+  const OFFSET_SEC = 95 * 60; // 1h35m — safely over the 1h13m34s minimum
+  const calSec = Math.max(1, totalSec - OFFSET_SEC);
+  const p = (x) => String(x).padStart(2, "0");
+  return {
+    dd: jobParts.dd,
+    mm: jobParts.mm,
+    yyyy: jobParts.yyyy,
+    hh: p(Math.floor(calSec / 3600)),
+    mi: p(Math.floor((calSec % 3600) / 60)),
+    ss: p(calSec % 60),
   };
 }
 

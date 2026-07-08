@@ -15,6 +15,11 @@
 export const DEFAULT_POSITION_LIMIT = 0.05; // metres
 export const DEFAULT_HEIGHT_LIMIT = 0.075; // metres
 
+// Client's exact minimum gap: the calibration ("Created (Coordinate System)")
+// must be older than the project ("Job Created") by MORE than this, or the
+// system refuses to save the job (JobForm) / generate the report (report page).
+export const CALIBRATION_MIN_GAP_MS = ((1 * 60 + 13) * 60 + 34) * 1000; // 1h 13m 34s
+
 // Minimum time gap required between a point's two double-polar observations.
 // A small plot can be re-observed within a few minutes; a farm (much larger,
 // the machine drifts more between visits) needs roughly an hour between visits.
