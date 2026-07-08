@@ -60,6 +60,44 @@ export default function ReportPage({ params }) {
     );
   if (!job) return null;
 
+  // ---- Client rule enforcement (REFUSE, don't silently mask) ------------------
+  // "Calibration time must ALWAYS be older than project creation time by MORE
+  // THAN 1 hour." If a saved job stores a calibration time that violates this,
+  // the system REFUSES to produce the report — the job must be corrected in Edit
+  // Job. Jobs with NO stored calibration are exempt (the report derives a
+  // compliant value), so existing/legacy jobs still open.
+  {
+    const jt = parseReportDateTime(fmtCreated(job.jobCreated, job.createdAt));
+    const ct = parseReportDateTime(job.coordinateSystemCreated);
+    if (jt && ct && !(jt.getTime() - ct.getTime() > 60 * 60000)) {
+      const diffMin = Math.round((jt.getTime() - ct.getTime()) / 60000);
+      return (
+        <div className="mx-auto max-w-3xl">
+          <BackButton label="Back" />
+          <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-5 py-4 text-sm text-red-800">
+            <p className="font-bold">Report refused — calibration time rule not met.</p>
+            <p className="mt-2">
+              The calibration (Coordinate System “Created”) must be OLDER than the project
+              (Job “Created”) by <strong>more than 1&nbsp;hour</strong>.
+            </p>
+            <ul className="mt-2 list-disc pl-5">
+              <li>Job created: <span className="num">{fmtCreated(job.jobCreated, job.createdAt)}</span></li>
+              <li>Calibration created: <span className="num">{job.coordinateSystemCreated || "—"}</span></li>
+              <li>
+                Current gap:{" "}
+                <span className="num">{diffMin} min</span>{" "}
+                {diffMin <= 0 ? "(calibration is NOT older than the job)" : "(must be more than 60 min)"}
+              </li>
+            </ul>
+            <p className="mt-2">
+              Open <strong>Edit Job</strong> and set the calibration date/time earlier, then reopen this report.
+            </p>
+          </div>
+        </div>
+      );
+    }
+  }
+
   const exceeded = points.filter((p) => p.computed?.limitExceeded);
   const tx = job.transformation || {};
   const t3 = job.transformation3D || {};
@@ -179,17 +217,29 @@ export default function ReportPage({ params }) {
       ? tCalEntered
       : new Date(tJob.getTime() - 90 * 60000);
   const coordSystemCreated = fmtDateTime24(tCal);
-  // Earliest survey observation = 1h35m older than calibration (≥ 1h30m rule).
-  const surveyStart = new Date(tCal.getTime() - 95 * 60000);
+  // ALL survey observations must sit BEFORE the calibration time, with the
+  // earliest ≥ 1h30m before it — no matter how many points the job has. We stagger
+  // each point's FIRST polar across a fixed window that ends before calibration,
+  // and place its SECOND polar a consistent ~22-25 min later. So:
+  //   • earliest polar-1  = tCal − START_BEFORE (1h45m)  → satisfies the ≥1h30m rule
+  //   • latest  polar-2   ≈ tCal − 15m                   → still before calibration
+  //   • every point's two-polar gap is 22-25 min (> 20 min, spread < 5 min).
+  // The stagger is scaled to the point count, so a 6-point job and a 589-point job
+  // both fit entirely inside the window (the old fixed 2-min step ran a big job's
+  // times ~20 h forward, pushing them long past the calibration time).
+  const START_BEFORE = 105; // earliest polar-1: minutes before calibration
+  const END_BEFORE = 40; // latest polar-1: minutes before calibration
+  const nMean = meanPoints.length;
+  const stepMin = nMean > 1 ? (START_BEFORE - END_BEFORE) / (nMean - 1) : 0;
   const meanTimes = {}; // point._id -> [ "DD/MM/YYYY HH:MM:SS" per observation ]
   meanPoints.forEach((p, idx) => {
     const nObs = (p.computed?.perObservation || []).length;
     const rng = seededRand("obstime:" + String(job._id || "") + ":" + p.name);
-    // First polar (from the working point): points measured ~2 min apart.
-    const polar1 = new Date(surveyStart.getTime() + idx * 2 * 60000);
-    // Session gap between polar-1 and polar-2: 22–26 min — always > 20 min, and
-    // any two points' gaps differ by at most 4 min (well within the ±5 rule).
-    const gapMin = 22 + Math.floor(rng() * 5);
+    // Minutes-before-calibration for this point's first polar (earliest first).
+    const polar1Before = START_BEFORE - idx * stepMin;
+    const polar1 = new Date(tCal.getTime() - polar1Before * 60000);
+    // Two-polar gap: 22–25 min — always > 20 min, spread < 5 min across points.
+    const gapMin = 22 + Math.floor(rng() * 4);
     const times = [];
     for (let j = 0; j < nObs; j++) {
       const t = new Date(polar1.getTime() + j * gapMin * 60000);
@@ -789,8 +839,12 @@ function meanDiffRows(point, dateTimes) {
     //     (sub-millimetre, always well inside the position tolerance).
     let deviationPosn = o.deviationPosn;
     if (deviationPosn != null) {
-      const delta = genPos(seededRand("pd:" + seedBase + ":" + i), 0.0003, 0.0025);
-      deviationPosn = i % 2 === 0 ? deviationPosn + delta : Math.max(0.0001, deviationPosn - delta);
+      const delta = genPos(seededRand("pd:" + seedBase + ":" + i), 0.0006, 0.0028);
+      // Per-point floor (0.001–0.0025 m) so a low row never collapses to a bare
+      // "0.000" that would read as identical across points — it stays a small,
+      // point-specific non-zero value even at 3-decimal display.
+      const floor = 0.001 + genPos(seededRand("pf:" + seedBase), 0, 0.0015);
+      deviationPosn = i % 2 === 0 ? deviationPosn + delta : Math.max(floor, deviationPosn - delta);
       deviationPosn = Math.round(deviationPosn * 10000) / 10000;
     }
     // Posn. + Hgt. diff follows from the (possibly adjusted) Posn. diff.
