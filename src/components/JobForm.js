@@ -4,7 +4,7 @@ import { useState, useEffect, useId, isValidElement, cloneElement } from "react"
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
-import { CALIBRATION_MIN_GAP_MS } from "@/lib/survey";
+import { CALIBRATION_MIN_GAP_MS, DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES, DEFAULT_MIN_TIME_DIFF_FARM_MINUTES } from "@/lib/survey";
 
 const LO_OPTIONS = ["LO15", "LO17", "LO19", "LO21", "LO23", "LO25", "LO27", "LO29", "LO31", "LO33"];
 
@@ -29,7 +29,8 @@ const EMPTY = {
   cscsModel: "",
   positionLimit: 0.05,
   heightLimit: 0.075,
-  minTimeDiffMinutes: 25,
+  surveyType: "plot",
+  minTimeDiffMinutes: DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
   coordDecimals: 4,
   timezone: "2h 00'",
   applicationSoftware: "LEICA Geo Office 7.0",
@@ -103,8 +104,18 @@ export default function JobForm({ initial, jobId }) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  // Plot (small site) vs farm (large site) sets which minimum time gap is
-  // (transformation + metadata) — "entered once per system, reused by every job".
+  // Plot (small site, observations minutes apart) vs Farm (large site, ~1hr
+  // apart) sets which minimum time gap between a point's two double-polar
+  // observations is required (client requirement).
+  function setSurveyType(type) {
+    setForm((f) => ({
+      ...f,
+      surveyType: type,
+      minTimeDiffMinutes: type === "farm" ? DEFAULT_MIN_TIME_DIFF_FARM_MINUTES : DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+    }));
+  }
+
+  // Saved coordinate systems (calibration entered once per system, reused).
   function applyCoordSystem(sys, { preserveCreated = false } = {}) {
     if (!preserveCreated) {
       setCalibrationTouched(true);
@@ -236,7 +247,7 @@ export default function JobForm({ initial, jobId }) {
         ...form,
         positionLimit: parseFloat(form.positionLimit) || 0.05,
         heightLimit: parseFloat(form.heightLimit) || 0.075,
-        minTimeDiffMinutes: parseFloat(form.minTimeDiffMinutes) || 25,
+        minTimeDiffMinutes: parseFloat(form.minTimeDiffMinutes) || DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
         coordDecimals: form.coordDecimals === 3 ? 3 : 4,
         transformation: {
           commonPoints: numOrNull(form.transformation.commonPoints),
@@ -454,10 +465,35 @@ export default function JobForm({ initial, jobId }) {
         </div>
 
         <div className="mt-4 border-t border-slate-100 pt-4">
+          <Field label="Survey type" full>
+            <p className="mb-2 text-[11px] text-slate-400">
+              A small plot can be re-observed within minutes; a farm (much larger, the machine drifts more
+              between visits) needs roughly an hour between the two double-polar observations.
+            </p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="surveyType"
+                  checked={form.surveyType === "plot"}
+                  onChange={() => setSurveyType("plot")}
+                />
+                Plot ({DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES} min)
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="surveyType"
+                  checked={form.surveyType === "farm"}
+                  onChange={() => setSurveyType("farm")}
+                />
+                Farm ({DEFAULT_MIN_TIME_DIFF_FARM_MINUTES} min)
+              </label>
+            </div>
+          </Field>
           <Field label="Minimum time difference — between observations (min)" full>
             <p className="mb-2 text-[11px] text-slate-400">
-              Enter the minimum time gap required between a point&apos;s two double-polar observations.
-              Choose any interval based on your survey type (e.g., minutes for a small plot, ~60 min for a farm).
+              Auto-filled from the survey type above; adjust here for a custom interval.
             </p>
             <input
               type="number"
