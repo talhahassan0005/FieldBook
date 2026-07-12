@@ -269,18 +269,28 @@ export default function ReportPage({ params }) {
   // during the day" is the hard floor, takes priority over the ≥1h30m guideline
   // for a legacy job whose calibration sits close to 07:00). We stagger each
   // point's FIRST polar across a fixed window that ends before calibration, and
-  // place its SECOND polar a consistent ~22-25 min later. So:
-  //   • earliest polar-1  = tCal − START_BEFORE (1h45m, clamped to the 07:00 floor)
+  // place its SECOND polar after it. So:
+  //   • earliest polar-1  = tCal − START_BEFORE  → satisfies the ≥1h30m rule
   //   • latest  polar-1   = tCal − END_BEFORE
-  //   • every point's two-polar gap is 22-25 min (> 20 min, spread < 5 min),
-  //     further clamped so polar-2 never lands ON/AFTER calibration.
+  //   • the two-polar gap is further clamped so polar-2 never lands ON/AFTER
+  //     calibration.
   // The stagger is scaled to the point count, so a 6-point job and a 589-point job
   // both fit entirely inside the window (a fixed 2-min step once ran a big job's
   // times ~20 h forward, pushing them long past the calibration time).
+  //
+  // Two-polar GAP (client, 2026-07): "I chose the difference of about 30-40
+  // mins, I expect to see that difference there" + "mix up the difference, it
+  // should NOT be consistent" — i.e. the gap must (a) be centred on the job's
+  // OWN configured minimum time-gap (`minTimeDiffMinutes`, what the surveyor
+  // actually set — not a hardcoded band unrelated to it), and (b) vary WIDELY
+  // point to point (±~30%), not sit in a narrow few-minute band.
+  const baseGapMin = Number(job.minTimeDiffMinutes) > 0 ? Number(job.minTimeDiffMinutes) : 30;
   const calMinuteOfDay = tCal.getHours() * 60 + tCal.getMinutes();
   const availableBeforeCal = Math.max(0, calMinuteOfDay - WORK_HOURS_START_MIN);
-  const START_BEFORE = Math.min(105, availableBeforeCal); // earliest polar-1: minutes before calibration
-  const END_BEFORE = Math.min(40, availableBeforeCal); // latest polar-1: minutes before calibration
+  // Enough headroom before calibration for the widest possible gap (~1.45x the
+  // base) plus a buffer, so polar-2 reliably lands before calibration.
+  const END_BEFORE = Math.min(Math.round(baseGapMin * 1.45) + 15, availableBeforeCal);
+  const START_BEFORE = Math.min(Math.max(END_BEFORE + 60, 105), availableBeforeCal);
   const nMean = meanPoints.length;
   const stepMin = nMean > 1 ? (START_BEFORE - END_BEFORE) / (nMean - 1) : 0;
   const meanTimes = {}; // point._id -> [ "DD/MM/YYYY HH:MM:SS" per observation ]
@@ -290,9 +300,13 @@ export default function ReportPage({ params }) {
     // Minutes-before-calibration for this point's first polar (earliest first).
     const polar1Before = START_BEFORE - idx * stepMin;
     const polar1 = new Date(tCal.getTime() - polar1Before * 60000);
-    // Two-polar gap: 22–25 min — always > 20 min, spread < 5 min across points —
-    // but never so large that polar-2 reaches the calibration time.
-    const gapMin = Math.min(22 + Math.floor(rng() * 4), Math.max(1, polar1Before - 1));
+    // Two-polar gap: varies ~0.85x–1.45x the job's own configured minimum gap
+    // (real field revisits are never identical), but never so large that
+    // polar-2 reaches the calibration time.
+    const gapMin = Math.min(
+      Math.max(1, Math.round(baseGapMin * (0.85 + rng() * 0.6))),
+      Math.max(1, polar1Before - 1)
+    );
     const times = [];
     for (let j = 0; j < nObs; j++) {
       const t = new Date(polar1.getTime() + j * gapMin * 60000);
