@@ -90,9 +90,19 @@ body {
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
-    /* Page margins come from this padding now (not @page) — see below. */
-    padding: 14mm 16mm !important;
+    /* Page margins come from this padding now (not @page) — see below.
+       Right side gets a bit more than left (client: "add a bit more margin
+       on the right"). */
+    padding: 14mm 22mm 14mm 16mm !important;
     max-width: none !important;
+    /* Without this, top/bottom padding only renders on the FIRST and LAST
+       physical page — every page break in between prints content flush
+       against the page edge (client: "add space at the top of the new page
+       and end of the previous page"). box-decoration-break: clone repeats
+       the padding at every page fragment, so each page gets the same
+       top/bottom breathing room, not just the outermost ones. */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
   /* Remove the browser's running header (date + page title) and footer (URL) on
      every page: with a ZERO @page margin there's no margin band for the browser

@@ -4,7 +4,13 @@ import { useState, useEffect, useId, isValidElement, cloneElement } from "react"
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
-import { CALIBRATION_MIN_GAP_MS, DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES, DEFAULT_MIN_TIME_DIFF_FARM_MINUTES } from "@/lib/survey";
+import {
+  CALIBRATION_MIN_GAP_MS,
+  DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+  DEFAULT_MIN_TIME_DIFF_FARM_MINUTES,
+  WORK_HOURS_START_MIN,
+  WORK_HOURS_END_MIN,
+} from "@/lib/survey";
 
 const LO_OPTIONS = ["LO15", "LO17", "LO19", "LO21", "LO23", "LO25", "LO27", "LO29", "LO31", "LO33"];
 
@@ -225,11 +231,23 @@ export default function JobForm({ initial, jobId }) {
       setError(dtErr);
       return;
     }
+    // Client: "we can only work during the day" — Job Created must fall within
+    // 07:00-18:00.
+    const jobHoursErr = workHoursError(dt, "Job Created");
+    if (jobHoursErr) {
+      setError(jobHoursErr);
+      return;
+    }
     // Client rule — the system must REFUSE when the calibration time is not older
     // than the project creation time by more than 1h13m34s (CALIBRATION_MIN_GAP_MS).
     const csErr = dateTimeError(dtCs);
     if (csErr) {
       setError("Calibration (Coordinate System) created: " + csErr);
+      return;
+    }
+    const calHoursErr = workHoursError(dtCs, "Calibration Created");
+    if (calHoursErr) {
+      setError(calHoursErr);
       return;
     }
     const tJob = parseDateTime(combineDateParts(dt));
@@ -311,7 +329,8 @@ export default function JobForm({ initial, jobId }) {
               <DtBox label="Sec" value={dt.ss} onChange={(v) => setDtPart("ss", v)} max={2} w="w-12" ph="04" />
             </div>
             <p className="mt-1 text-[11px] text-slate-400">
-              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour). All boxes are required.
+              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour). All boxes are required. Time must be
+              between 07:00 and 18:00.
             </p>
           </div>
           <Field label="Description" full>
@@ -378,7 +397,7 @@ export default function JobForm({ initial, jobId }) {
               <DtBox label="Sec" value={dtCs.ss} onChange={(v) => setDtCsPart("ss", v)} max={2} w="w-12" ph="00" />
             </div>
             <p className="mt-1 text-[11px] text-slate-400">
-              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour).
+              Format: DD / MM / YYYY&nbsp;&nbsp;HH : MM : SS (24-hour). Time must be between 07:00 and 18:00.
             </p>
           </div>
         </div>
@@ -582,22 +601,31 @@ function emptyParts() {
 }
 
 // Six-part date/time 5 days before today (client default for a brand-new Job
-// Created, so the boxes are never left blank / accidentally "today").
+// Created, so the boxes are never left blank / accidentally "today"). Time-of-day
+// keeps the actual current time when it's already within working hours
+// (07:00-18:00, client: "we can only work during the day"); otherwise falls back
+// to a safe 10:00:00 anchor that leaves enough room for the calibration default
+// (~1h35m earlier) to also land inside the window.
 function fiveDaysAgoParts() {
   const d = new Date();
   d.setDate(d.getDate() - 5);
+  const nowMin = d.getHours() * 60 + d.getMinutes();
+  if (nowMin < WORK_HOURS_START_MIN || nowMin > WORK_HOURS_END_MIN) {
+    d.setHours(10, 0, 0, 0);
+  }
   const p = (x) => String(x).padStart(2, "0");
   return { dd: p(d.getDate()), mm: p(d.getMonth() + 1), yyyy: String(d.getFullYear()), hh: p(d.getHours()), mi: p(d.getMinutes()), ss: p(d.getSeconds()) };
 }
 
 // Default Calibration Created from Job Created parts: SAME DATE (client: "pre
 // set the date of calibration to be the same as project created"), time pushed
-// back ~1h35m (comfortably over CALIBRATION_MIN_GAP_MS) but clamped to not
-// underflow past midnight into the previous day.
+// back ~1h35m (comfortably over CALIBRATION_MIN_GAP_MS) but clamped to never
+// underflow past midnight OR before 07:00 (client: work hours only).
 function deriveCalibrationParts(jobParts) {
   const totalSec = (+jobParts.hh || 0) * 3600 + (+jobParts.mi || 0) * 60 + (+jobParts.ss || 0);
   const OFFSET_SEC = 95 * 60; // 1h35m — safely over the 1h13m34s minimum
-  const calSec = Math.max(1, totalSec - OFFSET_SEC);
+  const floorSec = WORK_HOURS_START_MIN * 60;
+  const calSec = Math.max(floorSec, totalSec - OFFSET_SEC);
   const p = (x) => String(x).padStart(2, "0");
   return {
     dd: jobParts.dd,
@@ -633,6 +661,18 @@ function dateTimeError({ dd, mm, yyyy, hh, mi, ss }) {
   if (+hh > 23) return "Hours must be between 00 and 23.";
   if (+mi > 59) return "Minutes must be between 00 and 59.";
   if (+ss > 59) return "Seconds must be between 00 and 59.";
+  return "";
+}
+
+// Client: "we can only work during the day" — Job Created, Calibration Created
+// (and, at report display-time, Coordinate mean/survey times) must all fall
+// within 07:00-18:00. Returns an error message, or "" when the time-of-day is
+// within the window (inclusive of both ends).
+function workHoursError({ hh, mi }, label) {
+  const totalMin = (+hh || 0) * 60 + (+mi || 0);
+  if (totalMin < WORK_HOURS_START_MIN || totalMin > WORK_HOURS_END_MIN) {
+    return `${label} time must be between 07:00 and 18:00 (we can only work during the day).`;
+  }
   return "";
 }
 

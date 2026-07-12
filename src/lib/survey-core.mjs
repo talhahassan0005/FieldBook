@@ -26,10 +26,11 @@ export const CALIBRATION_MIN_GAP_MS = ((1 * 60 + 13) * 60 + 34) * 1000; // 1h 13
 export const DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES = 5;
 export const DEFAULT_MIN_TIME_DIFF_FARM_MINUTES = 60;
 
-// Field observations must be taken during working hours: 06:00-18:00.
+// Client: "we can only work during the day" — Job Created, Calibration Created,
+// and Coordinate mean (survey observation) times must all fall within 07:00-18:00.
 // An observation timestamped outside this window (e.g. 23:56 or 03:55) is
-// almost always a data-entry/transcription error and is flagged for review.
-export const WORK_HOURS_START_MIN = 6 * 60; // 06:00
+// almost always a data-entry/transcription error and is refused/re-derived.
+export const WORK_HOURS_START_MIN = 7 * 60; // 07:00
 export const WORK_HOURS_END_MIN = 18 * 60; // 18:00
 
 export function num(v) {

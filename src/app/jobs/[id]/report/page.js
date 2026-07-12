@@ -5,7 +5,7 @@ import { useEffect, useState, use } from "react";
 import Spinner from "@/components/Spinner";
 import BackButton from "@/components/BackButton";
 import { api } from "@/lib/api";
-import { fmt, positionQuality, CALIBRATION_MIN_GAP_MS } from "@/lib/survey";
+import { fmt, positionQuality, CALIBRATION_MIN_GAP_MS, WORK_HOURS_START_MIN, WORK_HOURS_END_MIN } from "@/lib/survey";
 
 export default function ReportPage({ params }) {
   const { id } = use(params);
@@ -96,6 +96,46 @@ export default function ReportPage({ params }) {
             </ul>
             <p className="mt-2">
               Open <strong>Edit Job</strong> and set the calibration date/time earlier, then reopen this report.
+            </p>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // Client: "we can only work during the day" — Job Created and Calibration
+  // Created must both fall within 07:00-18:00. Refuse rather than silently
+  // shift the stored time (that would print a date/time the surveyor never
+  // entered).
+  {
+    const jt = parseReportDateTime(fmtCreated(job.jobCreated, job.createdAt));
+    const ct = parseReportDateTime(job.coordinateSystemCreated);
+    const outside = (d) => {
+      const m = d.getHours() * 60 + d.getMinutes();
+      return m < WORK_HOURS_START_MIN || m > WORK_HOURS_END_MIN;
+    };
+    const badJob = jt && outside(jt);
+    const badCal = ct && outside(ct);
+    if (badJob || badCal) {
+      return (
+        <div className="mx-auto max-w-3xl">
+          <BackButton label="Back" />
+          <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-5 py-4 text-sm text-red-800">
+            <p className="font-bold">Report refused — outside working hours.</p>
+            <p className="mt-2">
+              Job Created and Calibration Created must both fall between{" "}
+              <strong>07:00 and 18:00</strong> (we can only work during the day).
+            </p>
+            <ul className="mt-2 list-disc pl-5">
+              {badJob && (
+                <li>Job created: <span className="num">{fmtCreated(job.jobCreated, job.createdAt)}</span> — outside 07:00-18:00</li>
+              )}
+              {badCal && (
+                <li>Calibration created: <span className="num">{job.coordinateSystemCreated || "—"}</span> — outside 07:00-18:00</li>
+              )}
+            </ul>
+            <p className="mt-2">
+              Open <strong>Edit Job</strong> and adjust the time(s), then reopen this report.
             </p>
           </div>
         </div>
@@ -224,17 +264,23 @@ export default function ReportPage({ params }) {
       : new Date(tJob.getTime() - 95 * 60000);
   const coordSystemCreated = fmtDateTime24(tCal);
   // ALL survey observations must sit BEFORE the calibration time, with the
-  // earliest ≥ 1h30m before it — no matter how many points the job has. We stagger
-  // each point's FIRST polar across a fixed window that ends before calibration,
-  // and place its SECOND polar a consistent ~22-25 min later. So:
-  //   • earliest polar-1  = tCal − START_BEFORE (1h45m)  → satisfies the ≥1h30m rule
-  //   • latest  polar-2   ≈ tCal − 15m                   → still before calibration
-  //   • every point's two-polar gap is 22-25 min (> 20 min, spread < 5 min).
+  // earliest ≥ 1h30m before it (both best-effort — see below) — no matter how
+  // many points the job has, AND never before 07:00 (client: "we can only work
+  // during the day" is the hard floor, takes priority over the ≥1h30m guideline
+  // for a legacy job whose calibration sits close to 07:00). We stagger each
+  // point's FIRST polar across a fixed window that ends before calibration, and
+  // place its SECOND polar a consistent ~22-25 min later. So:
+  //   • earliest polar-1  = tCal − START_BEFORE (1h45m, clamped to the 07:00 floor)
+  //   • latest  polar-1   = tCal − END_BEFORE
+  //   • every point's two-polar gap is 22-25 min (> 20 min, spread < 5 min),
+  //     further clamped so polar-2 never lands ON/AFTER calibration.
   // The stagger is scaled to the point count, so a 6-point job and a 589-point job
-  // both fit entirely inside the window (the old fixed 2-min step ran a big job's
+  // both fit entirely inside the window (a fixed 2-min step once ran a big job's
   // times ~20 h forward, pushing them long past the calibration time).
-  const START_BEFORE = 105; // earliest polar-1: minutes before calibration
-  const END_BEFORE = 40; // latest polar-1: minutes before calibration
+  const calMinuteOfDay = tCal.getHours() * 60 + tCal.getMinutes();
+  const availableBeforeCal = Math.max(0, calMinuteOfDay - WORK_HOURS_START_MIN);
+  const START_BEFORE = Math.min(105, availableBeforeCal); // earliest polar-1: minutes before calibration
+  const END_BEFORE = Math.min(40, availableBeforeCal); // latest polar-1: minutes before calibration
   const nMean = meanPoints.length;
   const stepMin = nMean > 1 ? (START_BEFORE - END_BEFORE) / (nMean - 1) : 0;
   const meanTimes = {}; // point._id -> [ "DD/MM/YYYY HH:MM:SS" per observation ]
@@ -244,8 +290,9 @@ export default function ReportPage({ params }) {
     // Minutes-before-calibration for this point's first polar (earliest first).
     const polar1Before = START_BEFORE - idx * stepMin;
     const polar1 = new Date(tCal.getTime() - polar1Before * 60000);
-    // Two-polar gap: 22–25 min — always > 20 min, spread < 5 min across points.
-    const gapMin = 22 + Math.floor(rng() * 4);
+    // Two-polar gap: 22–25 min — always > 20 min, spread < 5 min across points —
+    // but never so large that polar-2 reaches the calibration time.
+    const gapMin = Math.min(22 + Math.floor(rng() * 4), Math.max(1, polar1Before - 1));
     const times = [];
     for (let j = 0; j < nObs; j++) {
       const t = new Date(polar1.getTime() + j * gapMin * 60000);
@@ -369,7 +416,7 @@ export default function ReportPage({ params }) {
         </button>
       </div>
 
-      <div className="print-container mx-auto max-w-4xl bg-white px-12 py-10 text-[12.5px] leading-[1.45] text-black">
+      <div className="print-container mx-auto max-w-4xl bg-white pl-12 pr-16 py-10 text-[12.5px] leading-[1.45] text-black">
         {/* Report header — centred title + date, logo / placeholder box top-right */}
         <div className="relative mb-6">
           <ImageWithFallback src={job.logoUrl} />
@@ -515,26 +562,31 @@ export default function ReportPage({ params }) {
         {residualRows.length === 0 ? (
           <EmptyNote>No reference marks for calibration residuals.</EmptyNote>
         ) : (
-          <table className="w-full table-fixed border-collapse">
+          // compact + a total width that comfortably fits the print page's content
+          // area (narrower than the on-screen preview container) — the previous
+          // width (48rem, plus an extra pl-6 offset) exceeded that budget, so the
+          // table rendered fine on screen (wide container) but overflowed the
+          // narrower print page, landing differently between web and PDF.
+          <table className="table-fixed border-collapse" style={{ width: "36rem" }}>
             <thead>
               <tr>
-                <Th w="17%">System A</Th>
-                <Th w="17%">System B</Th>
-                <Th w="12%">Point type</Th>
-                <Th w="18%" right>dE [m]</Th>
-                <Th w="18%" right>dN [m]</Th>
-                <Th w="18%" right>dHgt [m]</Th>
+                <Th compact w="5rem">System A</Th>
+                <Th compact w="5rem">System B</Th>
+                <Th compact w="5rem">Point type</Th>
+                <Th compact w="5rem" right>dE [m]</Th>
+                <Th compact w="5rem" right>dN [m]</Th>
+                <Th compact w="5rem" right>dHgt [m]</Th>
               </tr>
             </thead>
             <tbody>
               {residualRows.map((c) => (
                 <tr key={c._id}>
-                  <Td>{c.name}</Td>
-                  <Td>{c.name}</Td>
-                  <Td>Position</Td>
-                  <Td right mono>{c.resEv != null ? `${fmt(c.resEv, coordDp)} m` : "-"}</Td>
-                  <Td right mono>{c.resNv != null ? `${fmt(c.resNv, coordDp)} m` : "-"}</Td>
-                  <Td right mono>{c.resHgtv != null ? `${fmt(c.resHgtv, coordDp)} m` : "-"}</Td>
+                  <Td compact>{c.name}</Td>
+                  <Td compact>{c.name}</Td>
+                  <Td compact>Position</Td>
+                  <Td compact right mono>{c.resEv != null ? `${fmt(c.resEv, coordDp)} m` : "-"}</Td>
+                  <Td compact right mono>{c.resNv != null ? `${fmt(c.resNv, coordDp)} m` : "-"}</Td>
+                  <Td compact right mono>{c.resHgtv != null ? `${fmt(c.resHgtv, coordDp)} m` : "-"}</Td>
                 </tr>
               ))}
             </tbody>
@@ -632,7 +684,10 @@ export default function ReportPage({ params }) {
                 const hasQuality = [o.sdE, o.sdN, o.sdHgt, o.sdSlope, pq].some((v) => v != null);
                 return (
                   <div key={`${p._id}-${i}`}>
-                    {/* Baseline band — kept thin (not too thick a highlight). */}
+                    {/* Baseline band — kept thin (not too thick a highlight); full
+                        width, matching every other section band (no extra inset —
+                        an inset here made this band shorter than "GPS Coordinates"
+                        above it). */}
                     <div className="grid grid-cols-3 gap-2 bg-[#d9d9d9] px-1.5 py-0 text-[12px] font-bold text-black leading-[1.3]">
                       <span className="whitespace-nowrap">Baseline</span>
                       <span className="whitespace-nowrap">Reference: {o.reference || "—"}</span>
@@ -661,16 +716,16 @@ export default function ReportPage({ params }) {
                     {hasQuality && (
                       <div className=" pt-1 text-[12px] whitespace-nowrap">
                         <span className="font-normal pl-1">Quality:</span>
-                        <span className="num pl-8">Sd. E: {fmt(o.sdE, coordDp)} m</span>
-                        <span className="pl-7">
-                            <span className="num pl-32">Sd. N: {fmt(o.sdN, coordDp)} m</span>
+                        <span className="num pl-5">Sd. E: {fmt(o.sdE, coordDp)} m</span>
+                        <span className="pl-5">
+                            <span className="num pl-24">Sd. N: {fmt(o.sdN, coordDp)} m</span>
                         </span>
-                        <span className="num pl-48">Sd. Hgt: {fmt(o.sdHgt, coordDp)} m</span>
+                        <span className="num pl-36">Sd. Hgt: {fmt(o.sdHgt, coordDp)} m</span>
                         <span />
                         <br></br>
                         <div className="pl-4">
-                            <span className="num pl-16">Posn. Qlty: {fmt(pq, coordDp)} m</span>
-                            <span className="num pl-32">Sd. Slope: {fmt(o.sdSlope, coordDp)} m</span>
+                            <span className="num pl-12">Posn. Qlty: {fmt(pq, coordDp)} m</span>
+                            <span className="num pl-24">Sd. Slope: {fmt(o.sdSlope, coordDp)} m</span>
                         </div>
                         <span />
                       </div>
@@ -731,34 +786,42 @@ export default function ReportPage({ params }) {
                       Single observation — no double-polar check available.
                     </p>
                   ) : (
-                    <table className="mt-1 border-collapse">
+                    // table-fixed + an explicit total width that comfortably fits the
+                    // print page's content area (narrower than the on-screen preview
+                    // container) — an auto-width nowrap table here used to size itself
+                    // to its (wide) natural content width, which fit fine in the wide
+                    // screen container but overflowed the narrower print page, making
+                    // the columns land differently between web and PDF. "compact"
+                    // trims the trailing cell padding + font-size a touch so the long
+                    // Leica headers ("Posn. + Hgt. diff [m]") still fit.
+                    <table className="mt-1 table-fixed border-collapse" style={{ width: "36.5rem" }}>
                       <thead>
                         <tr>
-                          <Th>Use</Th>
-                          <Th>Limit exceeded</Th>
-                          <Th>Reference</Th>
-                          <Th>Date / Time</Th>
-                          <Th right>Posn. diff [m]</Th>
-                          <Th right>Hgt. diff [m]</Th>
-                          <Th right>Posn. + Hgt. diff [m]</Th>
+                          <Th compact w="2.5rem">Use</Th>
+                          <Th compact w="5rem">Limit exceeded</Th>
+                          <Th compact w="5rem">Reference</Th>
+                          <Th compact w="7.5rem">Date / Time</Th>
+                          <Th compact w="5rem" right>Posn. diff [m]</Th>
+                          <Th compact w="5rem" right>Hgt. diff [m]</Th>
+                          <Th compact w="6.5rem" right>Posn. + Hgt. diff [m]</Th>
                         </tr>
                       </thead>
                       <tbody>
                         {meanDiffRows(p, meanTimes[p._id]).map((o, i) => (
                           <tr key={i}>
-                            <Td>✓</Td>
-                            <Td>
+                            <Td compact>✓</Td>
+                            <Td compact>
                               {showExceeded ? (
                                 <span className="font-bold text-red-600">Yes</span>
                               ) : (
                                 ""
                               )}
                             </Td>
-                            <Td nowrap>{o.reference || "-"}</Td>
-                            <Td nowrap>{o.dateTime || "-"}</Td>
-                            <Td right mono>{fmt(o.deviationPosn, coordDp)}</Td>
-                            <Td right mono>{fmt(o.deviationHgt, coordDp)}</Td>
-                            <Td right mono>{fmt(o.deviationCombined, coordDp)}</Td>
+                            <Td compact nowrap>{o.reference || "-"}</Td>
+                            <Td compact nowrap>{o.dateTime || "-"}</Td>
+                            <Td compact right mono>{fmt(o.deviationPosn, coordDp)}</Td>
+                            <Td compact right mono>{fmt(o.deviationHgt, coordDp)}</Td>
+                            <Td compact right mono>{fmt(o.deviationCombined, coordDp)}</Td>
                           </tr>
                         ))}
                       </tbody>
@@ -1060,19 +1123,24 @@ function EmptyNote({ children }) {
 }
 
 // Borderless table header cell (bold), matching the field book's plain tables.
-function Th({ children, right, w }) {
+// compact = tighter trailing padding + slightly smaller text, used only for
+// tables whose natural (nowrap) content would otherwise be wider than the
+// print page's content area (screen has a wide container to spare; print
+// doesn't, so an ordinary-width table there OVERFLOWS the page and ends up
+// misaligned relative to the on-screen preview — see the mean-diff table).
+function Th({ children, right, w, compact }) {
   return (
     <th
-      className={`whitespace-nowrap pr-6 py-[2px] align-bottom text-[12px] font-bold text-black ${right ? "text-right" : "text-left"}`}
+      className={`whitespace-nowrap ${compact ? "pr-2 text-[10.5px]" : "pr-6 text-[12px]"} py-[2px] align-bottom font-bold text-black ${right ? "text-right" : "text-left"}`}
       style={w ? { width: w } : undefined}
     >
       {children}
     </th>
   );
 }
-function Td({ children, right, mono, nowrap }) {
+function Td({ children, right, mono, nowrap, compact }) {
   return (
-    <td className={`pr-6 py-[1px] text-[12px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
+    <td className={`${compact ? "pr-2 text-[10.5px]" : "pr-6 text-[12px]"} py-[1px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
       {children}
     </td>
   );
