@@ -506,7 +506,7 @@ export default function JobForm({ initial, jobId }) {
                   checked={form.surveyType === "plot"}
                   onChange={() => setSurveyType("plot")}
                 />
-                Plot ({DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES} min)
+                Plot
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -515,14 +515,13 @@ export default function JobForm({ initial, jobId }) {
                   checked={form.surveyType === "farm"}
                   onChange={() => setSurveyType("farm")}
                 />
-                Farm ({DEFAULT_MIN_TIME_DIFF_FARM_MINUTES} min)
+                Farm
               </label>
             </div>
           </Field>
           <Field label="Minimum time difference — between observations (min)" full>
             <p className="mb-2 text-[11px] text-slate-400">
-              Auto-filled from the survey type above; adjust here for a custom interval. Any interval{" "}
-              <span className="num font-semibold">&lt;10 min</span> is allowed.
+              Auto-filled from the survey type above; adjust here for a custom interval.
             </p>
             <input
               type="number"
