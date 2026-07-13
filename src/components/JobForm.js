@@ -55,11 +55,19 @@ export default function JobForm({ initial, jobId }) {
   // opens with valid, rule-satisfying dates already in place; the user only has
   // to touch a box if the real date/time differs).
   const isNewJob = !jobId && !initial?.jobCreated;
+  // Random-but-STABLE extra offset added on top of the minimum required
+  // calibration gap — client: the default Job/Calibration times were always
+  // landing on the exact same values, they should vary (randomly) between
+  // jobs while still respecting the "more than 1h13m34s" minimum. Generated
+  // once per mount (useState, not Math.random() inline) so it stays fixed
+  // while the user is still typing Job Created digit by digit — only NEW
+  // jobs (fresh mounts) get a different random value.
+  const [calOffsetJitterSec] = useState(() => Math.floor(Math.random() * 30 * 60)); // 0-30 extra minutes
   // Computed once (not per-hook) so dt / dtCs / form all agree on the exact
   // same instant — calling `new Date()` separately in each initializer could
   // drift by a second between them.
   const defaultJobParts = isNewJob ? fiveDaysAgoParts() : null;
-  const defaultCalParts = isNewJob ? deriveCalibrationParts(defaultJobParts) : null;
+  const defaultCalParts = isNewJob ? deriveCalibrationParts(defaultJobParts, calOffsetJitterSec) : null;
 
   const [dt, setDt] = useState(() =>
     initial?.jobCreated ? parseDateParts(initial.jobCreated) : isNewJob ? defaultJobParts : emptyParts()
@@ -179,7 +187,7 @@ export default function JobForm({ initial, jobId }) {
       if (!calibrationTouched) {
         const jobParts = parseDateParts(v);
         if (jobParts.dd) {
-          const calParts = deriveCalibrationParts(jobParts);
+          const calParts = deriveCalibrationParts(jobParts, calOffsetJitterSec);
           next.coordinateSystemCreated = combineDateParts(calParts);
           setDtCs(calParts);
         }
@@ -309,7 +317,7 @@ export default function JobForm({ initial, jobId }) {
       <section className="card p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Job name *">
-            <input className="input" required aria-required="true" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="MATEBELE2022" />
+            <input className="input" required aria-required="true" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Nairobi2022" />
           </Field>
           <Field label="Creator / surveyor">
             <input className="input" value={form.creator} onChange={(e) => set("creator", e.target.value)} placeholder="BISM" />
@@ -354,7 +362,7 @@ export default function JobForm({ initial, jobId }) {
               list="coord-systems"
               value={form.coordinateSystemName}
               onChange={(e) => setCoordSystemName(e.target.value)}
-              placeholder="MATEBELE2D"
+              placeholder="Nairobi2D"
             />
             <datalist id="coord-systems">
               {coordSystems.map((s) => (
@@ -513,7 +521,8 @@ export default function JobForm({ initial, jobId }) {
           </Field>
           <Field label="Minimum time difference — between observations (min)" full>
             <p className="mb-2 text-[11px] text-slate-400">
-              Auto-filled from the survey type above; adjust here for a custom interval.
+              Auto-filled from the survey type above; adjust here for a custom interval. Any interval{" "}
+              <span className="num font-semibold">&lt;10 min</span> is allowed.
             </p>
             <input
               type="number"
@@ -605,14 +614,17 @@ function emptyParts() {
 // Created, so the boxes are never left blank / accidentally "today"). Time-of-day
 // keeps the actual current time when it's already within working hours
 // (07:00-18:00, client: "we can only work during the day"); otherwise falls back
-// to a safe 10:00:00 anchor that leaves enough room for the calibration default
-// (~1h35m earlier) to also land inside the window.
+// to a RANDOM time within a safe window (client: defaults were always landing
+// on the exact same fixed time — they should vary between jobs) that still
+// leaves enough room for the calibration default (offset forward) to also
+// land inside the window.
 function fiveDaysAgoParts() {
   const d = new Date();
   d.setDate(d.getDate() - 5);
   const nowMin = d.getHours() * 60 + d.getMinutes();
   if (nowMin < WORK_HOURS_START_MIN || nowMin > WORK_HOURS_END_MIN) {
-    d.setHours(10, 0, 0, 0);
+    const randHour = 8 + Math.floor(Math.random() * 8); // 08:00-15:59, leaves room to 18:00
+    d.setHours(randHour, Math.floor(Math.random() * 60), Math.floor(Math.random() * 60), 0);
   }
   const p = (x) => String(x).padStart(2, "0");
   return { dd: p(d.getDate()), mm: p(d.getMonth() + 1), yyyy: String(d.getFullYear()), hh: p(d.getHours()), mi: p(d.getMinutes()), ss: p(d.getSeconds()) };
@@ -620,14 +632,16 @@ function fiveDaysAgoParts() {
 
 // Default Calibration Created from Job Created parts: SAME DATE (client: "pre
 // set the date of calibration to be the same as project created"), time pushed
-// FORWARD exactly the minimum required gap — CALIBRATION_MIN_GAP_MS (1h13m34s)
-// — plus a single second so the default satisfies the strict "more than" rule
-// on its own. Client (2026-07-14): "swap them" — calibration is now the LATER
-// time (after Job Created), not the earlier one. Clamped to never overflow
-// past 18:00 (client: work hours only).
-function deriveCalibrationParts(jobParts) {
+// FORWARD by the minimum required gap — CALIBRATION_MIN_GAP_MS (1h13m34s) —
+// plus a random `extraOffsetSec` (0-30 min, stable per session, see
+// calOffsetJitterSec) so the default gap varies between jobs instead of
+// always being exactly 1h13m35s (client: "randomly... but properly with the
+// difference... 1hr 13min 34s"). Client (2026-07-14): "swap them" — calibration
+// is now the LATER time (after Job Created), not the earlier one. Clamped to
+// never overflow past 18:00 (client: work hours only).
+function deriveCalibrationParts(jobParts, extraOffsetSec = 0) {
   const totalSec = (+jobParts.hh || 0) * 3600 + (+jobParts.mi || 0) * 60 + (+jobParts.ss || 0);
-  const OFFSET_SEC = CALIBRATION_MIN_GAP_MS / 1000 + 1; // 1h13m34s + 1s
+  const OFFSET_SEC = CALIBRATION_MIN_GAP_MS / 1000 + 1 + extraOffsetSec; // 1h13m34s + 1s + jitter
   const ceilSec = WORK_HOURS_END_MIN * 60;
   const calSec = Math.min(ceilSec, totalSec + OFFSET_SEC);
   const p = (x) => String(x).padStart(2, "0");
