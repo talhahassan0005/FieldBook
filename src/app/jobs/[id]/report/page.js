@@ -819,16 +819,19 @@ export default function ReportPage({ params }) {
                     // screen container but overflowed the narrower print page, making
                     // the columns land differently between web and PDF. "compact" text
                     // size is close to (not identical to) the rest of the report — full
-                    // size reliably overflows this table's print budget — and the
-                    // Date/Time column drops seconds (withoutSeconds below) to free up
-                    // the room needed for the long Leica headers to still fit.
-                    <table className="mt-1 table-fixed border-collapse" style={{ width: "39rem" }}>
+                    // size reliably overflows this table's print budget. Date/Time KEEPS
+                    // its seconds (client requires real, non-:00 seconds always shown —
+                    // a prior attempt to drop them here to save width was wrong and was
+                    // reverted); the column width is widened instead, borrowing a little
+                    // room from "Limit exceeded" (its data is almost always blank/"Yes",
+                    // far shorter than its own header, so a tight box there is safe).
+                    <table className="mt-1 table-fixed border-collapse" style={{ width: "39.5rem" }}>
                       <thead>
                         <tr>
                           <Th compact w="2rem">Use</Th>
-                          <Th compact w="5.5rem">Limit exceeded</Th>
+                          <Th compact w="5rem">Limit exceeded</Th>
                           <Th compact w="4.5rem">Reference</Th>
-                          <Th compact w="8rem">Date / Time</Th>
+                          <Th compact w="9rem">Date / Time</Th>
                           <Th compact w="5.5rem" right>Posn. diff [m]</Th>
                           <Th compact w="5rem" right>Hgt. diff [m]</Th>
                           <Th compact w="8.5rem" right>Posn. + Hgt. diff [m]</Th>
@@ -846,7 +849,7 @@ export default function ReportPage({ params }) {
                               )}
                             </Td>
                             <Td compact nowrap>{o.reference || "-"}</Td>
-                            <Td compact nowrap>{withoutSeconds(o.dateTime) || "-"}</Td>
+                            <Td compact nowrap>{o.dateTime || "-"}</Td>
                             <Td compact right mono>{fmt(o.deviationPosn, coordDp)}</Td>
                             <Td compact right mono>{fmt(o.deviationHgt, coordDp)}</Td>
                             <Td compact right mono>{fmt(o.deviationCombined, coordDp)}</Td>
@@ -962,13 +965,6 @@ function withRealSeconds(value, rng) {
   if (m[2] && m[2] !== "00") return s; // already has real seconds
   const ss = String(1 + Math.floor(rng() * 59)).padStart(2, "0");
   return `${m[1]}:${ss}`;
-}
-
-// Drop the ":SS" seconds from a "DD/MM/YYYY HH:MM:SS" string — used only in
-// the compact mean-diff table to free up column width for the long Leica
-// headers at a font size closer to the rest of the report.
-function withoutSeconds(value) {
-  return String(value || "").replace(/(\d{1,2}:\d{2}):\d{2}$/, "$1");
 }
 
 function seededRand(seedStr) {
