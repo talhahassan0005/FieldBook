@@ -73,10 +73,6 @@ export default function HomePage() {
           <Link href="/jobs/new" className="btn-primary">
             + Create your first job
           </Link>
-          <p className="text-xs text-slate-400">
-            Or run <code className="rounded bg-slate-100 px-1">npm run seed</code> to load the sample
-            MATEBELE2022 field book.
-          </p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
