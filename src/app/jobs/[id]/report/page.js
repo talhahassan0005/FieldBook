@@ -272,45 +272,60 @@ export default function ReportPage({ params }) {
   // then I move the machine to measure second polar." So the true order is
   // Job Created → Calibration → Polar 1 → Polar 2, never the other way round.
   //
+  // TWO-PASS structure (client, 2026-07-14, detailed correction): it is NOT
+  // "per point: polar-1 then polar-2, then move to the next point." It's:
+  // (1) EVERY point's polar-1 first, one continuous pass, point times
+  //     "arranged starting with the most earliest until the last";
+  // (2) ONE machine reposition, "about 50 minutes" ("second polar time" only
+  //     starts after this — the surveyor physically moves the equipment once,
+  //     not once per point);
+  // (3) THEN every point's polar-2, a second continuous pass in the same
+  //     point order. Each point's own polar1→polar2 gap is therefore NOT an
+  //     independent random value any more — it falls out naturally from (how
+  //     far through pass 1 the point was) + the one 50-min move + (how far
+  //     through pass 2 it is), which is itself realistic variation.
+  //
   // Multi-day rollover (client, 2026-07-14): "if the points are too many, the
   // system should proceed [the] average times to the next day" — a big job's
   // observations are NEVER compressed to squeeze into one day's 07:00-18:00
   // window; the model just keeps walking forward through consecutive working
-  // days (via advanceWithinWorkHours below) for as long as it needs to.
-  //
-  // Two-polar GAP (client, 2026-07): "I chose the difference of about 30-40
-  // mins, I expect to see that difference there" + "mix up the difference, it
-  // should NOT be consistent" — i.e. the gap must (a) be centred on the job's
-  // OWN configured minimum time-gap (`minTimeDiffMinutes`, what the surveyor
-  // actually set — not a hardcoded band unrelated to it), and (b) vary WIDELY
-  // point to point (±~30%), not sit in a narrow few-minute band.
-  const baseGapMin = Number(job.minTimeDiffMinutes) > 0 ? Number(job.minTimeDiffMinutes) : 30;
+  // days (via advanceWithinWorkHours below) for as long as either pass needs.
   const meanTimes = {}; // point._id -> [ "DD/MM/YYYY HH:MM:SS" per observation ]
-  // Walk-forward cursor: this point's polar-1 starts a short pause after
-  // wherever the PREVIOUS point's last observation landed (or, for the first
-  // point, shortly after calibration) — never compressed, so it naturally
-  // spills into the next working day once 18:00 is reached.
+  const jobSeed = String(job._id || job.name || "fieldbook");
+  const paceRng = seededRand("pace:" + jobSeed);
+  // Pass 1 — polar-1 for every point, earliest to latest, ~3-7 min apart
+  // (realistic pacing walking the site), starting shortly after calibration.
   let cursor = advanceWithinWorkHours(tCal, 15);
+  const polar1Times = {};
+  meanPoints.forEach((p) => {
+    polar1Times[p._id] = new Date(cursor);
+    cursor = advanceWithinWorkHours(cursor, 3 + Math.floor(paceRng() * 5));
+  });
+  // The ONE machine move, after the last point's polar-1 — client: "about 50
+  // minutes" (a little organic variation, not a bit-for-bit fixed number).
+  const moveRng = seededRand("move:" + jobSeed);
+  cursor = advanceWithinWorkHours(cursor, 45 + Math.floor(moveRng() * 11));
+  // Pass 2 — polar-2 for every point, same order, same pacing, continuing
+  // forward from right after the move (may land on a later working day).
+  const polar2Times = {};
+  meanPoints.forEach((p) => {
+    polar2Times[p._id] = new Date(cursor);
+    cursor = advanceWithinWorkHours(cursor, 3 + Math.floor(paceRng() * 5));
+  });
   meanPoints.forEach((p) => {
     const nObs = (p.computed?.perObservation || []).length;
-    const rng = seededRand("obstime:" + String(job._id || "") + ":" + p.name);
-    const polar1 = new Date(cursor);
-    // Two-polar gap: varies ~0.85x–1.45x the job's own configured minimum gap
-    // (real field revisits are never identical); if it would cross 18:00,
-    // advanceWithinWorkHours rolls it to next-day 07:00 instead of clamping it.
-    const gapMin = Math.max(1, Math.round(baseGapMin * (0.85 + rng() * 0.6)));
+    const rng = seededRand("obstime:" + jobSeed + ":" + p.name);
     const times = [];
-    let t = polar1;
+    let t = null;
     for (let j = 0; j < nObs; j++) {
-      if (j > 0) t = advanceWithinWorkHours(t, gapMin);
+      // First two observations come from the two passes above; any further
+      // observation (rare — more than double-polar) just continues pacing on.
+      t = j === 0 ? polar1Times[p._id] : j === 1 ? polar2Times[p._id] : advanceWithinWorkHours(t, 3 + Math.floor(rng() * 5));
       const tt = new Date(t);
       tt.setSeconds(1 + Math.floor(rng() * 58)); // real (non-:00) seconds
       times.push(fmtDateTime24(tt));
     }
     meanTimes[p._id] = times;
-    // Move to the next point: a short realistic pacing gap (moving on site to
-    // the next corner) after this point's LAST observation.
-    cursor = advanceWithinWorkHours(t, 3 + Math.floor(rng() * 4));
   });
 
   // First-polar SETUP measurements that appear BEFORE the beacons. Each carries a
@@ -802,19 +817,21 @@ export default function ReportPage({ params }) {
                     // container) — an auto-width nowrap table here used to size itself
                     // to its (wide) natural content width, which fit fine in the wide
                     // screen container but overflowed the narrower print page, making
-                    // the columns land differently between web and PDF. "compact"
-                    // trims the trailing cell padding + font-size a touch so the long
-                    // Leica headers ("Posn. + Hgt. diff [m]") still fit.
-                    <table className="mt-1 table-fixed border-collapse" style={{ width: "36.5rem" }}>
+                    // the columns land differently between web and PDF. "compact" text
+                    // size is close to (not identical to) the rest of the report — full
+                    // size reliably overflows this table's print budget — and the
+                    // Date/Time column drops seconds (withoutSeconds below) to free up
+                    // the room needed for the long Leica headers to still fit.
+                    <table className="mt-1 table-fixed border-collapse" style={{ width: "39rem" }}>
                       <thead>
                         <tr>
-                          <Th compact w="2.5rem">Use</Th>
-                          <Th compact w="5rem">Limit exceeded</Th>
-                          <Th compact w="5rem">Reference</Th>
-                          <Th compact w="7.5rem">Date / Time</Th>
-                          <Th compact w="5rem" right>Posn. diff [m]</Th>
+                          <Th compact w="2rem">Use</Th>
+                          <Th compact w="5.5rem">Limit exceeded</Th>
+                          <Th compact w="4.5rem">Reference</Th>
+                          <Th compact w="8rem">Date / Time</Th>
+                          <Th compact w="5.5rem" right>Posn. diff [m]</Th>
                           <Th compact w="5rem" right>Hgt. diff [m]</Th>
-                          <Th compact w="6.5rem" right>Posn. + Hgt. diff [m]</Th>
+                          <Th compact w="8.5rem" right>Posn. + Hgt. diff [m]</Th>
                         </tr>
                       </thead>
                       <tbody>
@@ -829,7 +846,7 @@ export default function ReportPage({ params }) {
                               )}
                             </Td>
                             <Td compact nowrap>{o.reference || "-"}</Td>
-                            <Td compact nowrap>{o.dateTime || "-"}</Td>
+                            <Td compact nowrap>{withoutSeconds(o.dateTime) || "-"}</Td>
                             <Td compact right mono>{fmt(o.deviationPosn, coordDp)}</Td>
                             <Td compact right mono>{fmt(o.deviationHgt, coordDp)}</Td>
                             <Td compact right mono>{fmt(o.deviationCombined, coordDp)}</Td>
@@ -945,6 +962,13 @@ function withRealSeconds(value, rng) {
   if (m[2] && m[2] !== "00") return s; // already has real seconds
   const ss = String(1 + Math.floor(rng() * 59)).padStart(2, "0");
   return `${m[1]}:${ss}`;
+}
+
+// Drop the ":SS" seconds from a "DD/MM/YYYY HH:MM:SS" string — used only in
+// the compact mean-diff table to free up column width for the long Leica
+// headers at a font size closer to the rest of the report.
+function withoutSeconds(value) {
+  return String(value || "").replace(/(\d{1,2}:\d{2}):\d{2}$/, "$1");
 }
 
 function seededRand(seedStr) {
@@ -1134,15 +1158,17 @@ function EmptyNote({ children }) {
 }
 
 // Borderless table header cell (bold), matching the field book's plain tables.
-// compact = tighter trailing padding + slightly smaller text, used only for
-// tables whose natural (nowrap) content would otherwise be wider than the
-// print page's content area (screen has a wide container to spare; print
-// doesn't, so an ordinary-width table there OVERFLOWS the page and ends up
-// misaligned relative to the on-screen preview — see the mean-diff table).
+// compact = tighter trailing padding + a text size close to (not identical
+// to) the rest of the report, used only for tables whose natural (nowrap)
+// content would otherwise be wider than the print page's content area
+// (screen has a wide container to spare; print doesn't, so an ordinary-width
+// table there OVERFLOWS the page — see the mean-diff table). 11.5px is a
+// deliberate compromise: full 12px reliably overflows the print budget for
+// this specific table (long Leica headers + a full date/time column).
 function Th({ children, right, w, compact }) {
   return (
     <th
-      className={`whitespace-nowrap ${compact ? "pr-2 text-[10.5px]" : "pr-6 text-[12px]"} py-[2px] align-bottom font-bold text-black ${right ? "text-right" : "text-left"}`}
+      className={`whitespace-nowrap ${compact ? "pr-1 text-[11.5px]" : "pr-6 text-[12px]"} py-[2px] align-bottom font-bold text-black ${right ? "text-right" : "text-left"}`}
       style={w ? { width: w } : undefined}
     >
       {children}
@@ -1151,7 +1177,7 @@ function Th({ children, right, w, compact }) {
 }
 function Td({ children, right, mono, nowrap, compact }) {
   return (
-    <td className={`${compact ? "pr-2 text-[10.5px]" : "pr-6 text-[12px]"} py-[1px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
+    <td className={`${compact ? "pr-1 text-[11.5px]" : "pr-6 text-[12px]"} py-[1px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
       {children}
     </td>
   );
