@@ -619,11 +619,14 @@ function fiveDaysAgoParts() {
 
 // Default Calibration Created from Job Created parts: SAME DATE (client: "pre
 // set the date of calibration to be the same as project created"), time pushed
-// back ~1h35m (comfortably over CALIBRATION_MIN_GAP_MS) but clamped to never
-// underflow past midnight OR before 07:00 (client: work hours only).
+// back exactly the minimum required gap — CALIBRATION_MIN_GAP_MS (1h13m34s) —
+// plus a single second so the default satisfies the strict "more than" rule on
+// its own (client: "make the calibration time to be 1hr 13min 34s by default,
+// but the user will also be allowed to change it"). Clamped to never underflow
+// past midnight OR before 07:00 (client: work hours only).
 function deriveCalibrationParts(jobParts) {
   const totalSec = (+jobParts.hh || 0) * 3600 + (+jobParts.mi || 0) * 60 + (+jobParts.ss || 0);
-  const OFFSET_SEC = 95 * 60; // 1h35m — safely over the 1h13m34s minimum
+  const OFFSET_SEC = CALIBRATION_MIN_GAP_MS / 1000 + 1; // 1h13m34s + 1s
   const floorSec = WORK_HOURS_START_MIN * 60;
   const calSec = Math.max(floorSec, totalSec - OFFSET_SEC);
   const p = (x) => String(x).padStart(2, "0");
