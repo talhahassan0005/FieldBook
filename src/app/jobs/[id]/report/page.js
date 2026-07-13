@@ -61,17 +61,18 @@ export default function ReportPage({ params }) {
   if (!job) return null;
 
   // ---- Client rule enforcement (REFUSE, don't silently mask) ------------------
-  // "Calibration time must ALWAYS be older than project creation time by more
-  // than 1h 13m 34s" (CALIBRATION_MIN_GAP_MS). If a saved job stores a
-  // calibration time that violates this, the system REFUSES to produce the
-  // report — the job must be corrected in Edit Job. Jobs with NO stored
-  // calibration are exempt (the report derives a compliant value), so
+  // "Calibration time must ALWAYS be NEWER (later) than project creation time
+  // by more than 1h 13m 34s" (CALIBRATION_MIN_GAP_MS) — swapped 2026-07-14
+  // (client: "swap them", calibration is now the later time). If a saved job
+  // stores a calibration time that violates this, the system REFUSES to
+  // produce the report — the job must be corrected in Edit Job. Jobs with NO
+  // stored calibration are exempt (the report derives a compliant value), so
   // existing/legacy jobs still open.
   {
     const jt = parseReportDateTime(fmtCreated(job.jobCreated, job.createdAt));
     const ct = parseReportDateTime(job.coordinateSystemCreated);
-    if (jt && ct && !(jt.getTime() - ct.getTime() > CALIBRATION_MIN_GAP_MS)) {
-      const diffSec = Math.round((jt.getTime() - ct.getTime()) / 1000);
+    if (jt && ct && !(ct.getTime() - jt.getTime() > CALIBRATION_MIN_GAP_MS)) {
+      const diffSec = Math.round((ct.getTime() - jt.getTime()) / 1000);
       const fmtGap = (s) => {
         const sign = s < 0 ? "-" : "";
         s = Math.abs(s);
@@ -83,7 +84,7 @@ export default function ReportPage({ params }) {
           <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-5 py-4 text-sm text-red-800">
             <p className="font-bold">Report refused — calibration time rule not met.</p>
             <p className="mt-2">
-              The calibration (Coordinate System “Created”) must be OLDER than the project
+              The calibration (Coordinate System “Created”) must be NEWER (later) than the project
               (Job “Created”) by <strong>more than 1h 13m 34s</strong>.
             </p>
             <ul className="mt-2 list-disc pl-5">
@@ -91,11 +92,11 @@ export default function ReportPage({ params }) {
               <li>Calibration created: <span className="num">{job.coordinateSystemCreated || "—"}</span></li>
               <li>
                 Current gap: <span className="num">{fmtGap(diffSec)}</span>{" "}
-                {diffSec <= 0 ? "(calibration is NOT older than the job)" : "(must be more than 1h 13m 34s)"}
+                {diffSec <= 0 ? "(calibration is NOT later than the job)" : "(must be more than 1h 13m 34s)"}
               </li>
             </ul>
             <p className="mt-2">
-              Open <strong>Edit Job</strong> and set the calibration date/time earlier, then reopen this report.
+              Open <strong>Edit Job</strong> and set the calibration date/time later, then reopen this report.
             </p>
           </div>
         </div>
@@ -240,8 +241,8 @@ export default function ReportPage({ params }) {
   // ----- Deterministic report TIME MODEL (client's strict ordering rules) ------
   // The client reviews the printed field book and requires these relationships,
   // regardless of how sloppy the captured/imported times are:
-  //   • Calibration (Coordinate System "Created") must be OLDER than the project
-  //     "Created" by MORE THAN 1 hour  → we use 1h30m.
+  //   • Calibration (Coordinate System "Created") must be NEWER (later) than
+  //     the project "Created" by more than 1h13m34s (swapped 2026-07-14).
   //   • The INITIAL (earliest) Mean-Coordinates observation must be OLDER than
   //     the calibration time by AT LEAST 1h30m.
   //   • Each double-polar point's two observations are separated by a real gap
@@ -253,30 +254,29 @@ export default function ReportPage({ params }) {
     parseReportDateTime(fmtCreated(job.jobCreated, job.createdAt)) ||
     (job.createdAt ? new Date(job.createdAt) : new Date());
   // Honour the user-entered calibration time when present AND it satisfies the
-  // rule (older than the project by more than CALIBRATION_MIN_GAP_MS — the
-  // refuse-guard above already re-validates this, and the New/Edit Job form
-  // enforces it on save). Otherwise (old job, missing/invalid value) derive it
-  // 1h35m before the project so a bad legacy value never breaks the ordering.
+  // rule (NEWER than the project by more than CALIBRATION_MIN_GAP_MS — swapped
+  // 2026-07-14; the refuse-guard above already re-validates this, and the
+  // New/Edit Job form enforces it on save). Otherwise (old job, missing/invalid
+  // value) derive it 1h35m AFTER the project so a bad legacy value never
+  // breaks the ordering.
   const tCalEntered = parseReportDateTime(job.coordinateSystemCreated);
   const tCal =
-    tCalEntered && tJob.getTime() - tCalEntered.getTime() > CALIBRATION_MIN_GAP_MS
+    tCalEntered && tCalEntered.getTime() - tJob.getTime() > CALIBRATION_MIN_GAP_MS
       ? tCalEntered
-      : new Date(tJob.getTime() - 95 * 60000);
+      : new Date(tJob.getTime() + 95 * 60000);
   const coordSystemCreated = fmtDateTime24(tCal);
-  // ALL survey observations must sit BEFORE the calibration time, with the
-  // earliest ≥ 1h30m before it (both best-effort — see below) — no matter how
-  // many points the job has, AND never before 07:00 (client: "we can only work
-  // during the day" is the hard floor, takes priority over the ≥1h30m guideline
-  // for a legacy job whose calibration sits close to 07:00). We stagger each
-  // point's FIRST polar across a fixed window that ends before calibration, and
-  // place its SECOND polar after it. So:
-  //   • earliest polar-1  = tCal − START_BEFORE  → satisfies the ≥1h30m rule
-  //   • latest  polar-1   = tCal − END_BEFORE
-  //   • the two-polar gap is further clamped so polar-2 never lands ON/AFTER
-  //     calibration.
-  // The stagger is scaled to the point count, so a 6-point job and a 589-point job
-  // both fit entirely inside the window (a fixed 2-min step once ran a big job's
-  // times ~20 h forward, pushing them long past the calibration time).
+  // ALL survey observations must sit AFTER the calibration time — client
+  // (2026-07-14) explained the real on-site workflow: "Creating a job... After
+  // creating a job, then I measure the reference marks... I then use the
+  // machine to calibrate the site, after calibrating, I measure first polar...
+  // then I move the machine to measure second polar." So the true order is
+  // Job Created → Calibration → Polar 1 → Polar 2, never the other way round.
+  //
+  // Multi-day rollover (client, 2026-07-14): "if the points are too many, the
+  // system should proceed [the] average times to the next day" — a big job's
+  // observations are NEVER compressed to squeeze into one day's 07:00-18:00
+  // window; the model just keeps walking forward through consecutive working
+  // days (via advanceWithinWorkHours below) for as long as it needs to.
   //
   // Two-polar GAP (client, 2026-07): "I chose the difference of about 30-40
   // mins, I expect to see that difference there" + "mix up the difference, it
@@ -285,35 +285,32 @@ export default function ReportPage({ params }) {
   // actually set — not a hardcoded band unrelated to it), and (b) vary WIDELY
   // point to point (±~30%), not sit in a narrow few-minute band.
   const baseGapMin = Number(job.minTimeDiffMinutes) > 0 ? Number(job.minTimeDiffMinutes) : 30;
-  const calMinuteOfDay = tCal.getHours() * 60 + tCal.getMinutes();
-  const availableBeforeCal = Math.max(0, calMinuteOfDay - WORK_HOURS_START_MIN);
-  // Enough headroom before calibration for the widest possible gap (~1.45x the
-  // base) plus a buffer, so polar-2 reliably lands before calibration.
-  const END_BEFORE = Math.min(Math.round(baseGapMin * 1.45) + 15, availableBeforeCal);
-  const START_BEFORE = Math.min(Math.max(END_BEFORE + 60, 105), availableBeforeCal);
-  const nMean = meanPoints.length;
-  const stepMin = nMean > 1 ? (START_BEFORE - END_BEFORE) / (nMean - 1) : 0;
   const meanTimes = {}; // point._id -> [ "DD/MM/YYYY HH:MM:SS" per observation ]
-  meanPoints.forEach((p, idx) => {
+  // Walk-forward cursor: this point's polar-1 starts a short pause after
+  // wherever the PREVIOUS point's last observation landed (or, for the first
+  // point, shortly after calibration) — never compressed, so it naturally
+  // spills into the next working day once 18:00 is reached.
+  let cursor = advanceWithinWorkHours(tCal, 15);
+  meanPoints.forEach((p) => {
     const nObs = (p.computed?.perObservation || []).length;
     const rng = seededRand("obstime:" + String(job._id || "") + ":" + p.name);
-    // Minutes-before-calibration for this point's first polar (earliest first).
-    const polar1Before = START_BEFORE - idx * stepMin;
-    const polar1 = new Date(tCal.getTime() - polar1Before * 60000);
+    const polar1 = new Date(cursor);
     // Two-polar gap: varies ~0.85x–1.45x the job's own configured minimum gap
-    // (real field revisits are never identical), but never so large that
-    // polar-2 reaches the calibration time.
-    const gapMin = Math.min(
-      Math.max(1, Math.round(baseGapMin * (0.85 + rng() * 0.6))),
-      Math.max(1, polar1Before - 1)
-    );
+    // (real field revisits are never identical); if it would cross 18:00,
+    // advanceWithinWorkHours rolls it to next-day 07:00 instead of clamping it.
+    const gapMin = Math.max(1, Math.round(baseGapMin * (0.85 + rng() * 0.6)));
     const times = [];
+    let t = polar1;
     for (let j = 0; j < nObs; j++) {
-      const t = new Date(polar1.getTime() + j * gapMin * 60000);
-      t.setSeconds(1 + Math.floor(rng() * 58)); // real (non-:00) seconds
-      times.push(fmtDateTime24(t));
+      if (j > 0) t = advanceWithinWorkHours(t, gapMin);
+      const tt = new Date(t);
+      tt.setSeconds(1 + Math.floor(rng() * 58)); // real (non-:00) seconds
+      times.push(fmtDateTime24(tt));
     }
     meanTimes[p._id] = times;
+    // Move to the next point: a short realistic pacing gap (moving on site to
+    // the next corner) after this point's LAST observation.
+    cursor = advanceWithinWorkHours(t, 3 + Math.floor(rng() * 4));
   });
 
   // First-polar SETUP measurements that appear BEFORE the beacons. Each carries a
@@ -1173,6 +1170,29 @@ function TransformRow({ n, p, v }) {
 function fmtVal(v, dp = 4) {
   if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return "-";
   return Number(v).toFixed(dp);
+}
+
+// Advance a Date forward by `minutes`, confined to the 07:00-18:00 working
+// window — if advancing would cross 18:00, consume the rest of today, then
+// jump to TOMORROW's 07:00 and continue (client: "if the points are too many,
+// the system should proceed [the] average times to the next day" — large jobs
+// roll over across as many working days as needed, never get compressed to
+// fit one day).
+function advanceWithinWorkHours(d, minutes) {
+  let remaining = minutes;
+  let cur = new Date(d);
+  while (remaining > 0) {
+    const minuteOfDay = cur.getHours() * 60 + cur.getMinutes() + cur.getSeconds() / 60;
+    const roomToday = WORK_HOURS_END_MIN - minuteOfDay;
+    if (remaining <= roomToday) {
+      cur = new Date(cur.getTime() + remaining * 60000);
+      remaining = 0;
+    } else {
+      remaining -= roomToday;
+      cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1, Math.floor(WORK_HOURS_START_MIN / 60), WORK_HOURS_START_MIN % 60, 0);
+    }
+  }
+  return cur;
 }
 
 // Format a Date as "DD/MM/YYYY HH:MM:SS" (no comma, 24-hour) — the Leica style.

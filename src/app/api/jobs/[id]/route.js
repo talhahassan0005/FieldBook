@@ -3,7 +3,7 @@ import dbConnect from "@/lib/mongodb";
 import Job from "@/models/Job";
 import ControlPoint from "@/models/ControlPoint";
 import SurveyPoint from "@/models/SurveyPoint";
-import { computeSurveyPoint } from "@/lib/survey";
+import { computeSurveyPoint, isJobExpired } from "@/lib/survey";
 import { getAuthUser } from "@/lib/auth";
 
 export async function GET(request, { params }) {
@@ -15,6 +15,16 @@ export async function GET(request, { params }) {
     await dbConnect();
     const job = await Job.findById(id).lean();
     if (!job || String(job.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+    // Client: jobs older than 12h (from "Job Created") are deleted
+    // automatically — catches a direct/bookmarked link too, not just the list.
+    if (isJobExpired(job)) {
+      await Job.findByIdAndDelete(id);
+      await Promise.all([
+        ControlPoint.deleteMany({ job: id }),
+        SurveyPoint.deleteMany({ job: id }),
+      ]);
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
     return NextResponse.json(job);

@@ -169,10 +169,10 @@ export default function JobForm({ initial, jobId }) {
     if (match) applyCoordSystem(match);
   }
   // Job "Created" (when the machine was set up on site). Auto-follow the
-  // coordinate-system (calibration) "Created" to the SAME DATE, ~1h35m earlier
-  // (client: "pre set the date of calibration to be the same as project
-  // created") — unless the user (or a picked saved system) has already set
-  // their own calibration date/time, which then takes precedence.
+  // coordinate-system (calibration) "Created" to the SAME DATE, ~1h13m35s
+  // LATER (client, 2026-07-14: "swap them" — calibration is the later time)
+  // — unless the user (or a picked saved system) has already set their own
+  // calibration date/time, which then takes precedence.
   function setJobCreated(v) {
     setForm((f) => {
       const next = { ...f, jobCreated: v };
@@ -238,8 +238,9 @@ export default function JobForm({ initial, jobId }) {
       setError(jobHoursErr);
       return;
     }
-    // Client rule — the system must REFUSE when the calibration time is not older
-    // than the project creation time by more than 1h13m34s (CALIBRATION_MIN_GAP_MS).
+    // Client rule (swapped 2026-07-14) — the system must REFUSE when the
+    // calibration time is not NEWER (later) than the project creation time by
+    // more than 1h13m34s (CALIBRATION_MIN_GAP_MS).
     const csErr = dateTimeError(dtCs);
     if (csErr) {
       setError("Calibration (Coordinate System) created: " + csErr);
@@ -252,9 +253,9 @@ export default function JobForm({ initial, jobId }) {
     }
     const tJob = parseDateTime(combineDateParts(dt));
     const tCal = parseDateTime(combineDateParts(dtCs));
-    if (tJob && tCal && !(tJob.getTime() - tCal.getTime() > CALIBRATION_MIN_GAP_MS)) {
+    if (tJob && tCal && !(tCal.getTime() - tJob.getTime() > CALIBRATION_MIN_GAP_MS)) {
       setError(
-        "Calibration time must be OLDER than the Job Created time by more than 1h 13m 34s. Adjust the Created (Coordinate System) date/time."
+        "Calibration time must be NEWER (later) than the Job Created time by more than 1h 13m 34s. Adjust the Created (Coordinate System) date/time."
       );
       return;
     }
@@ -619,16 +620,16 @@ function fiveDaysAgoParts() {
 
 // Default Calibration Created from Job Created parts: SAME DATE (client: "pre
 // set the date of calibration to be the same as project created"), time pushed
-// back exactly the minimum required gap — CALIBRATION_MIN_GAP_MS (1h13m34s) —
-// plus a single second so the default satisfies the strict "more than" rule on
-// its own (client: "make the calibration time to be 1hr 13min 34s by default,
-// but the user will also be allowed to change it"). Clamped to never underflow
-// past midnight OR before 07:00 (client: work hours only).
+// FORWARD exactly the minimum required gap — CALIBRATION_MIN_GAP_MS (1h13m34s)
+// — plus a single second so the default satisfies the strict "more than" rule
+// on its own. Client (2026-07-14): "swap them" — calibration is now the LATER
+// time (after Job Created), not the earlier one. Clamped to never overflow
+// past 18:00 (client: work hours only).
 function deriveCalibrationParts(jobParts) {
   const totalSec = (+jobParts.hh || 0) * 3600 + (+jobParts.mi || 0) * 60 + (+jobParts.ss || 0);
   const OFFSET_SEC = CALIBRATION_MIN_GAP_MS / 1000 + 1; // 1h13m34s + 1s
-  const floorSec = WORK_HOURS_START_MIN * 60;
-  const calSec = Math.max(floorSec, totalSec - OFFSET_SEC);
+  const ceilSec = WORK_HOURS_END_MIN * 60;
+  const calSec = Math.min(ceilSec, totalSec + OFFSET_SEC);
   const p = (x) => String(x).padStart(2, "0");
   return {
     dd: jobParts.dd,

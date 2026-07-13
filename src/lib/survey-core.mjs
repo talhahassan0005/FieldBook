@@ -52,6 +52,25 @@ function parseObsDateTime(s) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// Public alias — same "DD/MM/YYYY[ HH:MM[:SS]]" parser, used server-side too
+// (e.g. auto-expiry cleanup) where importing a private function isn't possible.
+export const parseDateTimeString = parseObsDateTime;
+
+// Client: "job must be deleted automatically after 12 hrs of job created."
+export const JOB_EXPIRY_HOURS = 12;
+
+/**
+ * True once a job is older than JOB_EXPIRY_HOURS past its "Job Created" time.
+ * Prefers the surveyor-entered `jobCreated` string (the real on-site creation
+ * time); falls back to the Mongo `createdAt` timestamp when `jobCreated` is
+ * missing/unparseable, so a bad string never leaves a job to live forever.
+ */
+export function isJobExpired(job, now = new Date()) {
+  const anchor = parseDateTimeString(job?.jobCreated) || (job?.createdAt ? new Date(job.createdAt) : null);
+  if (!anchor || Number.isNaN(anchor.getTime())) return false;
+  return now.getTime() - anchor.getTime() >= JOB_EXPIRY_HOURS * 3600000;
+}
+
 /** Minutes since midnight (local) for a parsed observation Date. */
 function minutesOfDay(d) {
   return d.getHours() * 60 + d.getMinutes();
