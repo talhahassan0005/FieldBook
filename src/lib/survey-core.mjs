@@ -60,13 +60,17 @@ export const parseDateTimeString = parseObsDateTime;
 export const JOB_EXPIRY_HOURS = 12;
 
 /**
- * True once a job is older than JOB_EXPIRY_HOURS past its "Job Created" time.
- * Prefers the surveyor-entered `jobCreated` string (the real on-site creation
- * time); falls back to the Mongo `createdAt` timestamp when `jobCreated` is
- * missing/unparseable, so a bad string never leaves a job to live forever.
+ * True once a job is older than JOB_EXPIRY_HOURS past when its record was
+ * actually created in the app (Mongo `createdAt`) — NOT the surveyor-entered
+ * "Job Created" field, which is a simulated on-site timestamp the form
+ * deliberately defaults to several days in the past (so it's never blank).
+ * Anchoring on `jobCreated` instead caused brand-new jobs to be deleted
+ * immediately (the default was already "expired" the instant they were
+ * created) — fixed 2026-07-14. Falls back to `jobCreated` only if `createdAt`
+ * is somehow missing.
  */
 export function isJobExpired(job, now = new Date()) {
-  const anchor = parseDateTimeString(job?.jobCreated) || (job?.createdAt ? new Date(job.createdAt) : null);
+  const anchor = (job?.createdAt ? new Date(job.createdAt) : null) || parseDateTimeString(job?.jobCreated);
   if (!anchor || Number.isNaN(anchor.getTime())) return false;
   return now.getTime() - anchor.getTime() >= JOB_EXPIRY_HOURS * 3600000;
 }

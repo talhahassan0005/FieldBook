@@ -36,7 +36,7 @@ const EMPTY = {
   positionLimit: 0.05,
   heightLimit: 0.075,
   surveyType: "plot",
-  minTimeDiffMinutes: DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+  minTimeDiffMinutes: `<${DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES}mins`,
   coordDecimals: 4,
   timezone: "2h 00'",
   applicationSoftware: "LEICA Geo Office 7.0",
@@ -120,12 +120,21 @@ export default function JobForm({ initial, jobId }) {
 
   // Plot (small site, observations minutes apart) vs Farm (large site, ~1hr
   // apart) sets which minimum time gap between a point's two double-polar
-  // observations is required (client requirement).
+  // observations is required (client requirement). Client: selecting Plot
+  // shouldn't just show the bare number "5" — it should read "<5mins" so it's
+  // clear any value under the default is acceptable, not only that exact
+  // number. Shown as text; resolved back to the real numeric default on
+  // submit (see the surveyType-aware fallback there) unless the user types
+  // their own custom number over it.
   function setSurveyType(type) {
     setForm((f) => ({
       ...f,
       surveyType: type,
-      minTimeDiffMinutes: type === "farm" ? DEFAULT_MIN_TIME_DIFF_FARM_MINUTES : DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+      // Plot: "<5mins" (values under the default are fine). Farm: ">60mins"
+      // (client: "the same thing will apply with Farm... to show that only
+      // values bigger than [the default] are allowed" — flipped sign, a farm
+      // needs a LARGER minimum gap, not a smaller one).
+      minTimeDiffMinutes: type === "farm" ? `>${DEFAULT_MIN_TIME_DIFF_FARM_MINUTES}mins` : `<${DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES}mins`,
     }));
   }
 
@@ -274,7 +283,13 @@ export default function JobForm({ initial, jobId }) {
         ...form,
         positionLimit: parseFloat(form.positionLimit) || 0.05,
         heightLimit: parseFloat(form.heightLimit) || 0.075,
-        minTimeDiffMinutes: parseFloat(form.minTimeDiffMinutes) || DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES,
+        // "<5mins" / "<60mins" (the Plot/Farm display text) parses to NaN, so
+        // it falls back here to the numeric default matching whichever survey
+        // type is selected — not always Plot's — unless the user typed their
+        // own custom number over it.
+        minTimeDiffMinutes:
+          parseFloat(form.minTimeDiffMinutes) ||
+          (form.surveyType === "farm" ? DEFAULT_MIN_TIME_DIFF_FARM_MINUTES : DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES),
         coordDecimals: form.coordDecimals === 3 ? 3 : 4,
         transformation: {
           commonPoints: numOrNull(form.transformation.commonPoints),
@@ -524,9 +539,8 @@ export default function JobForm({ initial, jobId }) {
               Auto-filled from the survey type above; adjust here for a custom interval.
             </p>
             <input
-              type="number"
-              step="1"
-              min="0"
+              type="text"
+              inputMode="numeric"
               className="input num"
               value={form.minTimeDiffMinutes}
               onChange={(e) => set("minTimeDiffMinutes", e.target.value)}
