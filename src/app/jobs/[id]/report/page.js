@@ -899,45 +899,42 @@ export default function ReportPage({ params }) {
                       Single observation — no double-polar check available.
                     </p>
                   ) : (
-                    // table-fixed + an explicit total width that comfortably fits the
-                    // print page's content area (narrower than the on-screen preview
-                    // container) — an auto-width nowrap table here used to size itself
-                    // to its (wide) natural content width, which fit fine in the wide
-                    // screen container but overflowed the narrower print page, making
-                    // the columns land differently between web and PDF. Font now matches
-                    // the rest of the report (12px, see Th/Td) — fitting it required
-                    // shrinking the print right margin instead (see globals.css). Date/Time
-                    // KEEPS its seconds (client requires real, non-:00 seconds always
-                    // shown); "Limit exceeded" is kept tight since its data is almost
-                    // always blank/"Yes", far shorter than its own header.
-                    <table className="mt-1 table-fixed border-collapse" style={{ width: "43.25rem" }}>
+                    // Plain, natural (auto-width) table — same as every other table
+                    // in this report, so screen and print render from IDENTICAL
+                    // markup/CSS and can never drift apart. Previous attempts to
+                    // force this table narrower with table-fixed + guessed column
+                    // widths kept being wrong in one direction or another (either
+                    // overflowing print or overlapping its own headers); matching
+                    // the report's normal table style is what the screen version
+                    // already does correctly, so print now follows the same rule.
+                    <table className="mt-1 border-collapse">
                       <thead>
                         <tr>
-                          <Th compact w="1.5rem">Use</Th>
-                          <Th compact w="8rem">Limit exceeded</Th>
-                          <Th compact w="4rem">Reference</Th>
-                          <Th compact w="9.5rem">Date / Time</Th>
-                          <Th compact w="6rem" right>Posn. diff [m]</Th>
-                          <Th compact w="5.25rem" right>Hgt. diff [m]</Th>
-                          <Th compact w="9rem" right>Posn. + Hgt. diff [m]</Th>
+                          <Th tight>Use</Th>
+                          <Th tight>Limit exceeded</Th>
+                          <Th tight>Reference</Th>
+                          <Th tight>Date / Time</Th>
+                          <Th tight right>Posn. diff [m]</Th>
+                          <Th tight right>Hgt. diff [m]</Th>
+                          <Th tight right>Posn. + Hgt. diff [m]</Th>
                         </tr>
                       </thead>
                       <tbody>
                         {meanDiffRows(p, meanTimes[p._id]).map((o, i) => (
                           <tr key={i}>
-                            <Td compact>✓</Td>
-                            <Td compact>
+                            <Td tight>✓</Td>
+                            <Td tight>
                               {showExceeded ? (
                                 <span className="font-bold text-red-600">Yes</span>
                               ) : (
                                 ""
                               )}
                             </Td>
-                            <Td compact nowrap>{o.reference || "-"}</Td>
-                            <Td compact nowrap>{o.dateTime || "-"}</Td>
-                            <Td compact right mono>{fmt(o.deviationPosn, coordDp)}</Td>
-                            <Td compact right mono>{fmt(o.deviationHgt, coordDp)}</Td>
-                            <Td compact right mono>{fmt(o.deviationCombined, coordDp)}</Td>
+                            <Td tight nowrap>{o.reference || "-"}</Td>
+                            <Td tight nowrap>{o.dateTime || "-"}</Td>
+                            <Td tight right mono>{fmt(o.deviationPosn, coordDp)}</Td>
+                            <Td tight right mono>{fmt(o.deviationHgt, coordDp)}</Td>
+                            <Td tight right mono>{fmt(o.deviationCombined, coordDp)}</Td>
                           </tr>
                         ))}
                       </tbody>
@@ -1261,21 +1258,22 @@ function EmptyNote({ children }) {
 // (nowrap) content would otherwise be wider than the print page's content
 // area (screen has a wide container to spare; print doesn't, so an
 // ordinary-width table there OVERFLOWS the page — see the mean-diff table).
-// Text size now matches the report's other tables (12px) — the print right
-// margin was reduced to make room instead of shrinking this table's font.
-function Th({ children, right, w, compact }) {
+// tight = same idea but smaller: just a narrower gap between columns (client:
+// "reduce those spaces"), keeping natural (auto) table width and the normal
+// 12px font untouched — only the mean-diff table uses this.
+function Th({ children, right, w, compact, tight }) {
   return (
     <th
-      className={`whitespace-nowrap text-[12px] ${compact ? "pr-1" : "pr-6"} py-[2px] align-bottom font-bold text-black ${right ? "text-right" : "text-left"}`}
+      className={`whitespace-nowrap text-[12px] ${compact ? "pr-1" : tight ? "pr-2" : "pr-6"} py-[2px] align-bottom font-bold text-black ${right ? "text-right" : "text-left"}`}
       style={w ? { width: w } : undefined}
     >
       {children}
     </th>
   );
 }
-function Td({ children, right, mono, nowrap, compact }) {
+function Td({ children, right, mono, nowrap, compact, tight }) {
   return (
-    <td className={`text-[12px] ${compact ? "pr-1" : "pr-6"} py-[1px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
+    <td className={`text-[12px] ${compact ? "pr-1" : tight ? "pr-2" : "pr-6"} py-[1px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
       {children}
     </td>
   );
