@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, useRef, use } from "react";
 
 import Spinner from "@/components/Spinner";
 import BackButton from "@/components/BackButton";
@@ -16,6 +16,8 @@ export default function ReportPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [generatedAt, setGeneratedAt] = useState("");
   const [printing, setPrinting] = useState(false);
+  const [downloadingDoc, setDownloadingDoc] = useState(false);
+  const reportRef = useRef(null);
 
   // Show a brief "Preparing…" state, let React paint it, then open the print
   // dialog (window.print blocks, so the state must render first).
@@ -25,6 +27,54 @@ export default function ReportPage({ params }) {
       window.print();
       setPrinting(false);
     }, 150);
+  }
+
+  // Client: "add the option to download the report as doc as well as pdf" —
+  // a SEPARATE button, doesn't touch handlePrint/window.print above. Word
+  // can't read the app's Tailwind stylesheet, so each element's live computed
+  // style is copied inline onto a clone before serializing — that's what
+  // keeps the grey section bands, bold labels, table alignment, etc. intact
+  // when the file is opened in Word instead of collapsing to plain text.
+  function handleDownloadDoc() {
+    const node = reportRef.current;
+    if (!node) return;
+    setDownloadingDoc(true);
+    try {
+      const clone = node.cloneNode(true);
+      const styleProps = [
+        "fontFamily", "fontSize", "fontWeight", "fontStyle", "color",
+        "backgroundColor", "textAlign", "verticalAlign", "border", "borderCollapse",
+        "padding", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom",
+        "margin", "marginLeft", "marginRight", "marginTop", "marginBottom",
+        "width", "whiteSpace", "lineHeight",
+      ];
+      const liveEls = node.querySelectorAll("*");
+      const cloneEls = clone.querySelectorAll("*");
+      liveEls.forEach((el, i) => {
+        const cs = window.getComputedStyle(el);
+        const target = cloneEls[i];
+        if (!target) return;
+        const styleStr = styleProps
+          .map((p) => `${p.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase())}:${cs[p]}`)
+          .join(";");
+        target.setAttribute("style", styleStr);
+      });
+      const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>${job?.name || "Fieldbook Report"}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]--></head>
+<body>${clone.outerHTML}</body></html>`;
+      const blob = new Blob(["﻿", html], { type: "application/msword" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(job?.name || "fieldbook-report").replace(/[^\w.-]+/g, "_")}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingDoc(false);
+    }
   }
 
   useEffect(() => {
@@ -460,12 +510,17 @@ export default function ReportPage({ params }) {
       {/* Toolbar (hidden on print) */}
       <div className="no-print mb-4 flex items-center justify-between">
         <BackButton label="Back" />
-        <button className="btn-primary" onClick={handlePrint} disabled={printing}>
-          {printing ? "Preparing…" : "🖨 Print / Save as PDF"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="btn-secondary" onClick={handleDownloadDoc} disabled={downloadingDoc}>
+            {downloadingDoc ? "Preparing…" : "⬇ Download as DOC"}
+          </button>
+          <button className="btn-primary" onClick={handlePrint} disabled={printing}>
+            {printing ? "Preparing…" : "🖨 Print / Save as PDF"}
+          </button>
+        </div>
       </div>
 
-      <div className="print-container mx-auto max-w-4xl bg-white pl-12 pr-8 py-10 text-[12.5px] leading-[1.45] text-black">
+      <div ref={reportRef} className="print-container mx-auto max-w-4xl bg-white pl-12 pr-8 py-10 text-[12.5px] leading-[1.45] text-black">
         {/* Report header — centred title + date, logo / placeholder box top-right */}
         <div className="relative mb-6">
           <ImageWithFallback src={job.logoUrl} />
