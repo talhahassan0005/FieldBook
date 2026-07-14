@@ -465,7 +465,7 @@ export default function ReportPage({ params }) {
         </button>
       </div>
 
-      <div className="print-container mx-auto max-w-4xl bg-white pl-12 pr-16 py-10 text-[12.5px] leading-[1.45] text-black">
+      <div className="print-container mx-auto max-w-4xl bg-white pl-12 pr-8 py-10 text-[12.5px] leading-[1.45] text-black">
         {/* Report header — centred title + date, logo / placeholder box top-right */}
         <div className="relative mb-6">
           <ImageWithFallback src={job.logoUrl} />
@@ -692,9 +692,11 @@ export default function ReportPage({ params }) {
                 {calibrationPoints.map((c) => (
                   <tr key={c._id}>
                     <Td>{c.name}</Td>
-                    <Td className="right mono pr-16">{fmt(c.easting, coordDp)}</Td>
-                    <Td className="right mono pr-16">{fmt(c.northing, coordDp)}</Td>
-                    <Td className="right mono pr-16">{fmt(c.height, coordDp)}</Td>
+                    {/* Client (2026-07-14): "the reference marks must appear
+                        rounded to 2 decimal place" — System B: Local Grid only. */}
+                    <Td className="right mono pr-16">{fmt(c.easting, 2)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.northing, 2)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.height, 2)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -728,6 +730,11 @@ export default function ReportPage({ params }) {
                     refEasting = Math.round((ref.easting + mag * Math.cos(angle)) * 10000) / 10000;
                     refNorthing = Math.round((ref.northing + mag * Math.sin(angle)) * 10000) / 10000;
                   }
+                  // Client: a "Reference" grid coordinate must never show a lazy
+                  // 4th-decimal "0" — replace it with a real deterministic digit
+                  // (1-9), same "no suspicious trailing zero" rule used elsewhere.
+                  refEasting = realFourthDigit(refEasting, "ref4:" + String(job._id || "") + ":" + o.reference + ":E");
+                  refNorthing = realFourthDigit(refNorthing, "ref4:" + String(job._id || "") + ":" + o.reference + ":N");
                 }
                 const pq = positionQuality(o);
                 const hasQuality = [o.sdE, o.sdN, o.sdHgt, o.sdSlope, pq].some((v) => v != null);
@@ -757,7 +764,7 @@ export default function ReportPage({ params }) {
                           />
                           <CoordLine
                             label="Ortho. Hgt"
-                            a={hasRef ? fmt(ref.height, coordDp) : null}
+                            a={hasRef ? fmt(realFourthDigit(ref.height, "ref4:" + String(job._id || "") + ":" + o.reference + ":H"), coordDp) : null}
                             b={fmt(o.height, coordDp)}
                           />
                       </div>
@@ -840,24 +847,22 @@ export default function ReportPage({ params }) {
                     // container) — an auto-width nowrap table here used to size itself
                     // to its (wide) natural content width, which fit fine in the wide
                     // screen container but overflowed the narrower print page, making
-                    // the columns land differently between web and PDF. "compact" text
-                    // size is close to (not identical to) the rest of the report — full
-                    // size reliably overflows this table's print budget. Date/Time KEEPS
-                    // its seconds (client requires real, non-:00 seconds always shown —
-                    // a prior attempt to drop them here to save width was wrong and was
-                    // reverted); the column width is widened instead, borrowing a little
-                    // room from "Limit exceeded" (its data is almost always blank/"Yes",
-                    // far shorter than its own header, so a tight box there is safe).
-                    <table className="mt-1 table-fixed border-collapse" style={{ width: "39.5rem" }}>
+                    // the columns land differently between web and PDF. Font now matches
+                    // the rest of the report (12px, see Th/Td) — fitting it required
+                    // shrinking the print right margin instead (see globals.css). Date/Time
+                    // KEEPS its seconds (client requires real, non-:00 seconds always
+                    // shown); "Limit exceeded" is kept tight since its data is almost
+                    // always blank/"Yes", far shorter than its own header.
+                    <table className="mt-1 table-fixed border-collapse" style={{ width: "43.25rem" }}>
                       <thead>
                         <tr>
-                          <Th compact w="2rem">Use</Th>
-                          <Th compact w="5rem">Limit exceeded</Th>
-                          <Th compact w="4.5rem">Reference</Th>
-                          <Th compact w="9rem">Date / Time</Th>
-                          <Th compact w="5.5rem" right>Posn. diff [m]</Th>
-                          <Th compact w="5rem" right>Hgt. diff [m]</Th>
-                          <Th compact w="8.5rem" right>Posn. + Hgt. diff [m]</Th>
+                          <Th compact w="1.5rem">Use</Th>
+                          <Th compact w="8rem">Limit exceeded</Th>
+                          <Th compact w="4rem">Reference</Th>
+                          <Th compact w="9.5rem">Date / Time</Th>
+                          <Th compact w="6rem" right>Posn. diff [m]</Th>
+                          <Th compact w="5.25rem" right>Hgt. diff [m]</Th>
+                          <Th compact w="9rem" right>Posn. + Hgt. diff [m]</Th>
                         </tr>
                       </thead>
                       <tbody>
@@ -905,15 +910,19 @@ function ImageWithFallback({ src }) {
     // original Leica Geo Office field book exactly when no logo is embedded.
     return (
       <div
-        className="absolute right-0 top-[-15px]"
-        style={{ width: 232, height: 86 }}
-      >
+  className="absolute right-0 top-[-15px] border-t border-l border-gray-400 border-r border-b border-r-gray-100 border-b-gray-100 bg-white"
+  style={{ width: 232, height: 65 }}
+>
         <div className="flex items-start" style={{ gap: 6, padding: 6 }}>
           {/* MS-Office broken-image red-X icon */}
           <svg width="15" height="15" viewBox="0 0 16 16" className="flex-shrink-0" aria-hidden="true">
-            <rect x="0.5" y="0.5" width="15" height="15" fill="#ffffff" stroke="#d01818" strokeWidth="1" />
-            <path d="M3.2 3.2 L12.8 12.8 M12.8 3.2 L3.2 12.8" stroke="#d01818" strokeWidth="1.4" />
-          </svg>
+  <rect x="0.5" y="0.5" width="15" height="15" fill="#ffffff" />
+  {/* top + left border - dark */}
+  <path d="M0.5 15.5 L0.5 0.5 L15.5 0.5" stroke="#808080" strokeWidth="1" fill="none" />
+  {/* bottom + right border - light */}
+  <path d="M15.5 0.5 L15.5 15.5 L0.5 15.5" stroke="#d4d0c8" strokeWidth="1" fill="none" />
+  <path d="M3.2 3.2 L12.8 12.8 M12.8 3.2 L3.2 12.8" stroke="#d01818" strokeWidth="1.4" />
+</svg>
           <span style={{ color: "#3b3b3b", fontSize: 8, lineHeight: 1.35 }}>
             The linked image cannot be displayed. The file may have been moved, renamed, or deleted. Verify that the link points to the correct file and location.
           </span>
@@ -1016,6 +1025,20 @@ function genVal(rng, min, max) {
 // quality figures, which are always positive.
 function genPos(rng, min, max) {
   return Math.round((min + rng() * (max - min)) * 10000) / 10000;
+}
+
+// Client: a "Reference" grid coordinate whose 4th decimal digit is a lazy "0"
+// (older/raw stored data that was effectively zero-padded, not a real 4th
+// digit) must show a real deterministic digit 1-9 instead — "this should
+// also be 4 decimal place... with any number between 1-9". Values that
+// already have a genuine non-zero 4th digit are left untouched.
+function realFourthDigit(v, seedStr) {
+  if (v === null || v === undefined || !Number.isFinite(Number(v))) return v;
+  const s = Number(v).toFixed(4);
+  if (!s.endsWith("0")) return Number(s);
+  const rng = seededRand(seedStr);
+  const digit = 1 + Math.floor(rng() * 9); // 1-9, never 0
+  return Number(s.slice(0, -1) + digit);
 }
 
 // True if a stored rotation string is a real (non-zero) DMS angle — a stored
@@ -1177,17 +1200,16 @@ function EmptyNote({ children }) {
 }
 
 // Borderless table header cell (bold), matching the field book's plain tables.
-// compact = tighter trailing padding + a text size close to (not identical
-// to) the rest of the report, used only for tables whose natural (nowrap)
-// content would otherwise be wider than the print page's content area
-// (screen has a wide container to spare; print doesn't, so an ordinary-width
-// table there OVERFLOWS the page — see the mean-diff table). 11.5px is a
-// deliberate compromise: full 12px reliably overflows the print budget for
-// this specific table (long Leica headers + a full date/time column).
+// compact = tighter trailing padding, used only for tables whose natural
+// (nowrap) content would otherwise be wider than the print page's content
+// area (screen has a wide container to spare; print doesn't, so an
+// ordinary-width table there OVERFLOWS the page — see the mean-diff table).
+// Text size now matches the report's other tables (12px) — the print right
+// margin was reduced to make room instead of shrinking this table's font.
 function Th({ children, right, w, compact }) {
   return (
     <th
-      className={`whitespace-nowrap ${compact ? "pr-1 text-[11.5px]" : "pr-6 text-[12px]"} py-[2px] align-bottom font-bold text-black ${right ? "text-right" : "text-left"}`}
+      className={`whitespace-nowrap text-[12px] ${compact ? "pr-1" : "pr-6"} py-[2px] align-bottom font-bold text-black ${right ? "text-right" : "text-left"}`}
       style={w ? { width: w } : undefined}
     >
       {children}
@@ -1196,7 +1218,7 @@ function Th({ children, right, w, compact }) {
 }
 function Td({ children, right, mono, nowrap, compact }) {
   return (
-    <td className={`${compact ? "pr-1 text-[11.5px]" : "pr-6 text-[12px]"} py-[1px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
+    <td className={`text-[12px] ${compact ? "pr-1" : "pr-6"} py-[1px] text-black ${right ? "text-right" : "text-left"} ${mono ? "num" : ""} ${nowrap ? "whitespace-nowrap" : ""}`}>
       {children}
     </td>
   );
