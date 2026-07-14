@@ -1160,7 +1160,7 @@ function Plain({ children, sub }) {
 
 // Container for a single-column label : value list.
 function Fields({ children }) {
-  return <div className="mb-2 mt-1">{children}</div>;
+  return <div className="mb-2 mt-2">{children}</div>;
 }
 
 // One "Label:  value" line — the value aligns at a fixed column (tab stop) so the
