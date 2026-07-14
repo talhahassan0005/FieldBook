@@ -36,6 +36,27 @@ function decimalDigits(raw) {
 }
 
 /**
+ * Client rule (2026-07): a CSV coordinate with EXACTLY 3 decimal places gets
+ * an artificial 4th digit derived from the average of its existing 3 decimal
+ * digits (floored), instead of a bare trailing zero — which was producing
+ * suspicious ".XXX0" mean-coordinate averages in the report. e.g.
+ * "2784620.296" -> digits 2,9,6 -> avg (2+9+6)/3 = 5.666 -> floor 5 ->
+ * 2784620.2965. Values with any OTHER decimal-digit count (already 4+, or
+ * fewer than 3) are parsed normally — the rule is specifically for 3-decimal
+ * source data.
+ */
+function deriveFourthDecimal(raw) {
+  const s = String(raw ?? "").trim();
+  if (decimalDigits(s) !== 3) return toNum(s);
+  const m = s.match(/^(-?\d+)\.(\d{3})$/);
+  if (!m) return toNum(s);
+  const [, intPart, decPart] = m;
+  const digits = decPart.split("").map(Number);
+  const avgDigit = Math.floor((digits[0] + digits[1] + digits[2]) / 3);
+  return parseFloat(`${intPart}.${decPart}${avgDigit}`);
+}
+
+/**
  * @param {string} text       - pasted block
  * @param {string[]} columns  - column spec, e.g. ["name","easting","northing","height","sdE","sdN","sdHgt","code"]
  * @returns {{rows: Array, errors: string[]}}
@@ -58,6 +79,10 @@ export function parsePastedRows(text, columns) {
     // Calibration columns for control / identical points.
     "wgs84X", "wgs84Y", "wgs84Z", "resE", "resN", "resHgt",
   ]);
+  // Coordinate columns get the 3-decimal -> derived-4th-digit treatment
+  // (client rule above); other numeric columns (Sd/quality, calibration) are
+  // left as plain numbers.
+  const fourDecimalCols = new Set(["easting", "northing", "height"]);
 
   lines.forEach((line, idx) => {
     const cells = splitLine(line, delim);
@@ -79,7 +104,8 @@ export function parsePastedRows(text, columns) {
     columns.forEach((col, c) => {
       const raw = cells[c];
       if (col === "ignore" || col === undefined) return;
-      if (numericCols.has(col)) rec[col] = toNum(raw);
+      if (fourDecimalCols.has(col)) rec[col] = deriveFourthDecimal(raw);
+      else if (numericCols.has(col)) rec[col] = toNum(raw);
       else rec[col] = raw !== undefined ? String(raw).trim() : "";
     });
 
