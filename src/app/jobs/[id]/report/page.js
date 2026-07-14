@@ -521,7 +521,9 @@ export default function ReportPage({ params }) {
       </div>
 
       <div ref={reportRef} className="print-container mx-auto max-w-4xl bg-white pl-12 pr-8 py-10 text-[12.5px] leading-[1.45] text-black">
-        {/* Report header — centred title + date, logo / placeholder box top-right */}
+        {/* Report header — centred title + date, logo / placeholder box top-right.
+            The title stays TRUE CENTER of the page always — the logo box's own
+            position is what's adjusted (not the heading) to stay clear of it. */}
         <div className="relative mb-6">
           <ImageWithFallback src={job.logoUrl} />
           <h1 className="text-center text-[22px] font-bold text-black">Fieldbook Report</h1>
