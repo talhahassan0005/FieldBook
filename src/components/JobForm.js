@@ -290,7 +290,9 @@ export default function JobForm({ initial, jobId }) {
         minTimeDiffMinutes:
           parseFloat(form.minTimeDiffMinutes) ||
           (form.surveyType === "farm" ? DEFAULT_MIN_TIME_DIFF_FARM_MINUTES : DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES),
-        coordDecimals: form.coordDecimals === 3 ? 3 : 4,
+        // Client: "some examiners have a problem with 3 decimal places... so
+        // that we maintain 4" — always 4 now, the 3-decimal option removed.
+        coordDecimals: 4,
         transformation: {
           commonPoints: numOrNull(form.transformation.commonPoints),
           rotationOriginX: numOrNull(form.transformation.rotationOriginX),
@@ -480,74 +482,7 @@ export default function JobForm({ initial, jobId }) {
           )}
         </div>
 
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <span className="label">Coordinates decimal places (field book report)</span>
-          <p className="mb-2 text-[11px] text-slate-400">
-            How many decimal places Easting/Northing/Height/CQ are shown to in the printed report.
-          </p>
-          <div className="flex items-center gap-5 text-sm text-slate-700">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="coordDecimals"
-                checked={form.coordDecimals !== 3}
-                onChange={() => set("coordDecimals", 4)}
-              />
-              4 decimal places
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="coordDecimals"
-                checked={form.coordDecimals === 3}
-                onChange={() => set("coordDecimals", 3)}
-              />
-              3 decimal places
-            </label>
-          </div>
-        </div>
 
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <Field label="Survey type" full>
-            <p className="mb-2 text-[11px] text-slate-400">
-              A small plot can be re-observed within minutes; a farm (much larger, the machine drifts more
-              between visits) needs roughly an hour between the two double-polar observations.
-            </p>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="surveyType"
-                  checked={form.surveyType === "plot"}
-                  onChange={() => setSurveyType("plot")}
-                />
-                Plot
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="surveyType"
-                  checked={form.surveyType === "farm"}
-                  onChange={() => setSurveyType("farm")}
-                />
-                Farm
-              </label>
-            </div>
-          </Field>
-          <Field label="Minimum time difference — between observations (min)" full>
-            <p className="mb-2 text-[11px] text-slate-400">
-              Auto-filled from the survey type above; adjust here for a custom interval.
-            </p>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="input num"
-              value={form.minTimeDiffMinutes}
-              onChange={(e) => set("minTimeDiffMinutes", e.target.value)}
-              placeholder="e.g., 25"
-            />
-          </Field>
-        </div>
       </section>
 
       <div className="flex items-center gap-3">

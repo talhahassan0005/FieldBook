@@ -49,9 +49,9 @@ export default function ControlPointsPage({ params }) {
     }
   }
 
-  // Follows the job's "Coordinates decimal places" setting (same one used on
-  // the printed field book report) so WP1 / MTRM4 etc. show consistent precision.
-  const coordDp = job?.coordDecimals === 3 ? 3 : 4;
+  // Client (2026-07-14): always 4 decimal places now — the 3-decimal option
+  // was removed ("some examiners have a problem with 3 decimal places").
+  const coordDp = 4;
 
   useEffect(() => {
     load();

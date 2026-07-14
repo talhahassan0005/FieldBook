@@ -148,9 +148,10 @@ export default function ReportPage({ params }) {
   const tx = job.transformation || {};
   const t3 = job.transformation3D || {};
   const hx = job.heightTransformation || {};
-  // Client: let the user choose 3 or 4 decimal places for the field book's
-  // coordinate values (Avg. Local Coordinates: Easting/Northing/Ortho.Hgt/CQ).
-  const coordDp = job.coordDecimals === 3 ? 3 : 4;
+  // Client (2026-07-14): "some examiners have a problem with 3 decimal
+  // places... so that we maintain 4" — always 4 now, regardless of what a
+  // job has stored (fixes existing jobs saved with 3, not just new ones).
+  const coordDp = 4;
   // Coordinate System Information — client: "default information missing".
   // These fall back to sensible non-blank values when the job has none stored
   // (covers jobs created before defaults existed, not just brand-new ones).
@@ -290,27 +291,49 @@ export default function ReportPage({ params }) {
   // observations are NEVER compressed to squeeze into one day's 07:00-18:00
   // window; the model just keeps walking forward through consecutive working
   // days (via advanceWithinWorkHours below) for as long as either pass needs.
+  //
+  // Point-to-point gap = t = D/S (client, 2026-07-14, replacing the earlier
+  // arbitrary "few minutes" pacing): "if we have points A-D, Time for A will
+  // be the initial time, then for B will be = (Distance between B&A)/speed,
+  // then for C will be = (Distance between C&B)/speed, etc." Applied within
+  // BOTH passes — the gap to each point is its straight-line distance from
+  // the PREVIOUS point (mean coordinates) divided by a walking speed.
   const meanTimes = {}; // point._id -> [ "DD/MM/YYYY HH:MM:SS" per observation ]
   const jobSeed = String(job._id || job.name || "fieldbook");
-  const paceRng = seededRand("pace:" + jobSeed);
-  // Pass 1 — polar-1 for every point, earliest to latest, ~3-7 min apart
-  // (realistic pacing walking the site), starting shortly after calibration.
+  // Client clarification (2026-07-14): "Speed for Plot use 1.04m/s & for farm
+  // use 1.39/seconds" — read from the job's own surveyType (still stored on
+  // the job even though its dedicated form section was removed).
+  const SURVEY_SPEED_M_PER_MIN = (job.surveyType === "farm" ? 1.39 : 1.04) * 60;
+  const pointDistanceM = (a, b) => {
+    const ca = a.computed || {};
+    const cb = b.computed || {};
+    const de = (ca.meanEasting ?? 0) - (cb.meanEasting ?? 0);
+    const dn = (ca.meanNorthing ?? 0) - (cb.meanNorthing ?? 0);
+    return Math.sqrt(de * de + dn * dn);
+  };
+  const travelMinutes = (distM) => Math.max(1, distM / SURVEY_SPEED_M_PER_MIN);
+  // Pass 1 — polar-1 for every point, earliest to latest, starting shortly
+  // after calibration; A = the starting time, each later point = t = D/S on.
   let cursor = advanceWithinWorkHours(tCal, 15);
   const polar1Times = {};
+  let prevPoint = null;
   meanPoints.forEach((p) => {
+    if (prevPoint) cursor = advanceWithinWorkHours(cursor, travelMinutes(pointDistanceM(p, prevPoint)));
     polar1Times[p._id] = new Date(cursor);
-    cursor = advanceWithinWorkHours(cursor, 3 + Math.floor(paceRng() * 5));
+    prevPoint = p;
   });
   // The ONE machine move, after the last point's polar-1 — client: "about 50
   // minutes" (a little organic variation, not a bit-for-bit fixed number).
   const moveRng = seededRand("move:" + jobSeed);
   cursor = advanceWithinWorkHours(cursor, 45 + Math.floor(moveRng() * 11));
-  // Pass 2 — polar-2 for every point, same order, same pacing, continuing
-  // forward from right after the move (may land on a later working day).
+  // Pass 2 — polar-2 for every point, same order, same t = D/S gaps,
+  // continuing forward from right after the move (may land on a later day).
   const polar2Times = {};
+  prevPoint = null;
   meanPoints.forEach((p) => {
+    if (prevPoint) cursor = advanceWithinWorkHours(cursor, travelMinutes(pointDistanceM(p, prevPoint)));
     polar2Times[p._id] = new Date(cursor);
-    cursor = advanceWithinWorkHours(cursor, 3 + Math.floor(paceRng() * 5));
+    prevPoint = p;
   });
   meanPoints.forEach((p) => {
     const nObs = (p.computed?.perObservation || []).length;
