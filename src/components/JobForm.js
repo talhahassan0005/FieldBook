@@ -482,6 +482,35 @@ export default function JobForm({ initial, jobId }) {
           )}
         </div>
 
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <Field label="Survey type" full>
+            <p className="mb-2 text-[11px] text-slate-400">
+              A small plot can be re-observed within minutes; a farm (much larger, the machine drifts more
+              between visits) needs roughly an hour between the two double-polar observations. Also sets the
+              walking speed used to work out realistic time gaps between points on the report.
+            </p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="surveyType"
+                  checked={form.surveyType === "plot"}
+                  onChange={() => setSurveyType("plot")}
+                />
+                Plot
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="surveyType"
+                  checked={form.surveyType === "farm"}
+                  onChange={() => setSurveyType("farm")}
+                />
+                Farm
+              </label>
+            </div>
+          </Field>
+        </div>
 
       </section>
 
