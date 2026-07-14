@@ -2,15 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import PasswordField from "@/components/PasswordField";
 
 export default function ForgotPasswordPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,22 +14,13 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError("");
     setMessage("");
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
     setLoading(true);
     try {
-      const response = await api.post("/api/auth/reset-password", { email, password });
-      setMessage(response.message || "Password updated successfully");
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
-      setTimeout(() => router.push("/login"), 1200);
+      const response = await api.post("/api/auth/forgot-password", { email });
+      setMessage(response.message || "If an account exists for that email, a password reset link has been sent.");
     } catch (err) {
       setError(err.message);
+    } finally {
       setLoading(false);
     }
   }
@@ -42,9 +28,9 @@ export default function ForgotPasswordPage() {
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
       <div className="card p-6">
-        <h1 className="text-xl font-bold text-slate-900">Reset your password</h1>
+        <h1 className="text-xl font-bold text-slate-900">Forgot your password?</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Enter your account email and a new password to update it.
+          Enter your account email and we&apos;ll send you a link to reset your password.
         </p>
 
         {error && (
@@ -73,30 +59,9 @@ export default function ForgotPasswordPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
+              disabled={loading}
             />
           </div>
-          <PasswordField
-            id="new-password"
-            label="New password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter a new password"
-            autoComplete="new-password"
-            minLength={6}
-            required
-            disabled={loading}
-          />
-          <PasswordField
-            id="confirm-password"
-            label="Confirm password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter the new password"
-            autoComplete="new-password"
-            minLength={6}
-            required
-            disabled={loading}
-          />
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? (
               <span className="inline-flex items-center gap-2">
@@ -104,10 +69,10 @@ export default function ForgotPasswordPage() {
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
                   <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" opacity="0.75" />
                 </svg>
-                Updating password…
+                Sending…
               </span>
             ) : (
-              "Update password"
+              "Send reset link"
             )}
           </button>
         </form>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { AUTH_COOKIE, verifyAuthToken } from "@/lib/auth-edge";
 
 // Routes that don't require a signed-in user.
-const PUBLIC_PAGE_PATHS = ["/login", "/signup", "/forgot-password"];
+const PUBLIC_PAGE_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password"];
 const PUBLIC_API_PREFIXES = ["/api/auth"];
 
 function isPublicPath(pathname) {
