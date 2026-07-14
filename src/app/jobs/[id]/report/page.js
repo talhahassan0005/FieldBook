@@ -524,9 +524,9 @@ export default function ReportPage({ params }) {
         {/* Report header — centred title + date, logo / placeholder box top-right.
             The title stays TRUE CENTER of the page always — the logo box's own
             position is what's adjusted (not the heading) to stay clear of it. */}
-        <div className="relative mb-6">
+        <div className="relative mb-16">
           <ImageWithFallback src={job.logoUrl} />
-          <h1 className="text-center text-[22px] font-bold text-black">Fieldbook Report</h1>
+          <h1 className="text-center pt-8 text-[22px] font-bold text-black">Fieldbook Report</h1>
           <p className="mt-0.5 text-center text-[12px] text-black">{reportDate}</p>
         </div>
 
@@ -967,8 +967,8 @@ function ImageWithFallback({ src }) {
     // original Leica Geo Office field book exactly when no logo is embedded.
     return (
       <div
-  className="absolute right-[-32px] top-[-38px] border-t border-l border-gray-400 border-r border-b border-r-gray-100 border-b-gray-100 bg-white"
-  style={{ width: 232, height: 65 }}
+  className="absolute right-[-8px] top-[-38px] border-t border-l border-gray-400 border-r border-b border-r-gray-100 border-b-gray-100 bg-white"
+  style={{ width: 200, height: 65 }}
 >
         <div className="flex items-start" style={{ gap: 6, padding: 6 }}>
           {/* MS-Office broken-image red-X icon */}
