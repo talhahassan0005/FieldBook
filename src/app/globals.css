@@ -60,14 +60,14 @@ body {
 
 /* Force background colours (the grey section bands) to render on screen AND when
    printing — browsers strip backgrounds from print by default, which made the
-   Leica-style section bands disappear in the PDF. */
+   -style section bands disappear in the PDF. */
 .print-container,
 .print-container * {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 
-/* Match the Leica field book typography: Arial throughout, including coordinate
+/* Match the  field book typography: Arial throughout, including coordinate
    numbers (proportional Arial with tabular figures so columns still align —
    NOT a monospace font). */
 .print-container {

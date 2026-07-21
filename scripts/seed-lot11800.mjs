@@ -225,7 +225,7 @@ async function seed() {
       positionLimit: POSITION_LIMIT,
       heightLimit: HEIGHT_LIMIT,
       timezone: "UTC+2",
-      applicationSoftware: "Leica SmartWorx",
+      applicationSoftware: " SmartWorx",
       firmwareVersion: "v7.0.1",
       codelistName: "HPS Standard Codes",
     });

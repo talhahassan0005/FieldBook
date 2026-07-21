@@ -248,7 +248,7 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
       positionQuality: positionQuality(o),
       deviationPosn: round(finalPosn, 4),
       deviationHgt: finalHgt !== null ? round(finalHgt, 4) : null,
-      // Combined Posn+Hgt difference, Euclidean (matches the Leica field book:
+      // Combined Posn+Hgt difference, Euclidean (matches the  field book:
       // sqrt(posnDiff^2 + hgtDiff^2)). Equals posn deviation when no height.
       deviationCombined:
         finalHgt !== null
@@ -259,7 +259,7 @@ export function computeSurveyPoint(observations = [], limits = {}, options = {})
 
   // Coordinate quality of the mean: standard error of the mean position
   // (RMS deviation / sqrt(n)) unless manually overridden. Transparent, not
-  // Leica's proprietary CQ — see README.
+  // 's proprietary CQ — see README.
   const cq = cqOverride !== null ? cqOverride : n > 1 ? Math.sqrt(sumSqDev / n) / Math.sqrt(n) : 0;
 
   const positionExceeded = positionDiff > positionLimit;

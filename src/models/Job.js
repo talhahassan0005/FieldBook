@@ -22,7 +22,7 @@ const JobSchema = new Schema(
     // Whether survey points capture/check height (heights are often omitted).
     includeHeight: { type: Boolean, default: false },
 
-    // Coordinate system / calibration metadata (mirrors the Leica field book).
+    // Coordinate system / calibration metadata (mirrors the  field book).
     coordinateSystemName: { type: String, default: "" },
     coordinateSystemCreated: { type: String, default: "" },
     transformationName: { type: String, default: "" },
@@ -80,7 +80,7 @@ const JobSchema = new Schema(
 
     // Extra equipment metadata.
     timezone: { type: String, default: "2h 00'" },
-    applicationSoftware: { type: String, default: "LEICA Geo Office 7.0" },
+    applicationSoftware: { type: String, default: " Geo Office 7.0" },
     firmwareVersion: { type: String, default: "5.60" },
     codelistName: { type: String, default: "THEBE" },
 

@@ -12,7 +12,7 @@
  *   which the Field Book report then prints as garbage or "-".
  *
  * What it does, per job:
- *   1. Resets junk/empty Height-transformation text to the Leica "no-height"
+ *   1. Resets junk/empty Height-transformation text to the  "no-height"
  *      defaults ("0.00000000  0.00000000  0.0000 m", "0° 00' 00.00000\"").
  *   2. Clears junk text out of transformation.rotation.
  *   3. Backfills null 2D-Helmert values from another job that shares the same
@@ -42,7 +42,7 @@ if (!MONGODB_URI) {
 
 const APPLY = process.argv.includes("--apply");
 
-// Leica "no-height calibration" defaults (match scripts/seed-matebele.mjs).
+//  "no-height calibration" defaults (match scripts/seed-matebele.mjs).
 const HEIGHT_DEFAULTS = {
   parameters: "0.00000000  0.00000000  0.0000 m",
   inclinationX: "0° 00' 00.00000\"",
@@ -94,7 +94,7 @@ async function run() {
     const set = {};
     const notes = [];
 
-    /* ---- Height transformation: reset junk / empty text to Leica defaults ---- */
+    /* ---- Height transformation: reset junk / empty text to  defaults ---- */
     const hx = job.heightTransformation || {};
     const params = cleanText({ current: hx.parameters, isJunk: isJunkParameters, fallback: HEIGHT_DEFAULTS.parameters });
     const inclX = cleanText({ current: hx.inclinationX, isJunk: isJunkAngle, fallback: HEIGHT_DEFAULTS.inclinationX });
@@ -106,7 +106,7 @@ async function run() {
     if (hx.commonPoints == null) { set["heightTransformation.commonPoints"] = 0; notes.push("commonPoints: null → 0"); }
 
     /* ---- Transformation type / pre-transformation name: junk text ---- */
-    // transformationType should be a real Leica type; lorem-ipsum like
+    // transformationType should be a real  type; lorem-ipsum like
     // "Duis et voluptatem" is junk → reset to the default "Twostep".
     const VALID_TYPES = new Set(["Twostep", "Onestep", "Classical", "Classical 3D"]);
     if (job.transformationType && !VALID_TYPES.has(String(job.transformationType).trim())) {

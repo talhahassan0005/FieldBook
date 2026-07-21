@@ -1,5 +1,5 @@
 /**
- * Seed the database with the sample MATEBELE2022 field book (from the Leica
+ * Seed the database with the sample MATEBELE2022 field book (from the 
  * RTK GPS report the app is modelled on).
  *
  * Run with:  npm run seed
@@ -66,7 +66,7 @@ const job = {
   positionLimit: 0.05,
   heightLimit: 0.075,
   timezone: "2h 00'",
-  applicationSoftware: "LEICA Geo Office 7.0",
+  applicationSoftware: " Geo Office 7.0",
   firmwareVersion: "5.60",
   codelistName: "THEBE",
 };
@@ -85,7 +85,7 @@ const surveyPoints = [
   {
     name: "M1",
     code: "beacon",
-    cqOverride: 0.0017, // exact CQ from the original Leica field book
+    cqOverride: 0.0017, // exact CQ from the original  field book
     observations: [
       { reference: "MTRM4", dateTime: "10/06/2022 08:51:39", easting: 96991.1062, northing: 2715175.4782, sdE: 0.0143, sdN: 0.0082, sdHgt: 0.0379, sdSlope: 0.0084, posnDiffOverride: 0.0009, hgtDiffOverride: -0.0011 },
       { reference: "WP1", dateTime: "10/06/2022 10:24:45", easting: 96991.1192, northing: 2715175.503, sdE: 0.0076, sdN: 0.0059, sdHgt: 0.0275, sdSlope: 0.0061, posnDiffOverride: 0.0014, hgtDiffOverride: 0.0016 },

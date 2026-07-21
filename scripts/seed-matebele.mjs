@@ -1,5 +1,5 @@
 /**
- * Seed the EXACT "MATEBELE2022" Leica field book (from the client's sample) so the
+ * Seed the EXACT "MATEBELE2022"  field book (from the client's sample) so the
  * generated report matches the original 1:1 — every section, every value.
  *
  * Non-destructive: only removes a previous MATEBELE2022 job (and its points),
@@ -53,7 +53,7 @@ const JOB = {
   projection: "TM27",
   geoidModel: "",
   cscsModel: "",
-  applicationSoftware: "LEICA Geo Office 7.0",
+  applicationSoftware: " Geo Office 7.0",
   firmwareVersion: "5.60",
   codelistName: "THEBE",
   positionLimit: POSITION_LIMIT,
@@ -86,7 +86,7 @@ const CONTROL = [
 ];
 
 // Survey rovers. M1/M2 are double-polar (MTRM4 + WP1); the rest single observations.
-// posnDiff/hgtDiff/cq are the values from the Leica field book (kept as overrides so
+// posnDiff/hgtDiff/cq are the values from the  field book (kept as overrides so
 // the Mean Coordinates table matches the original instrument output exactly).
 const SURVEY = [
   { name: "25A1", obs: [{ reference: "MTRM4", easting: 97039.6447, northing: 2715189.9822, sdE: 0.0081, sdN: 0.0066, sdHgt: 0.018, sdSlope: 0.0082 }] },

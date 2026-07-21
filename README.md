@@ -1,6 +1,6 @@
 # Cadastral Field Book
 
-A digital field book for **Leica RTK GPS cadastral surveys**, built around the
+A digital field book for ** RTK GPS cadastral surveys**, built around the
 **double-polar** workflow used in cadastral/plot surveys.
 
 Built with **Next.js (App Router) + Tailwind CSS + MongoDB (Mongoose)**.
@@ -33,7 +33,7 @@ This app digitises that workflow:
    `7033`) are caught instantly. Configurable column order; auto-detects
    comma/tab/space delimiters.
 5. **Field Book Report** — a clean, printable report (Print / Save as PDF) that
-   mirrors the Leica fieldbook: company header, job info, coordinate system,
+   mirrors the  fieldbook: company header, job info, coordinate system,
    control points, observations, and mean coordinates with `Posn. diff` /
    `Hgt. diff` / `Posn.+Hgt. diff` + a pass/fail summary.
 
@@ -69,7 +69,7 @@ npm run dev
 Open <http://localhost:3000>.
 
 ### 4. (Optional) Load the sample field book
-Loads the `MATEBELE2022` job from the original Leica report so you can see real
+Loads the `MATEBELE2022` job from the original  report so you can see real
 data immediately:
 ```bash
 npm run seed
@@ -96,7 +96,7 @@ For a point with observations from references A and B (`lib/survey.js`):
 | CQ             | standard error of the mean position (RMS deviation / √n)       |
 | **Limit exceeded** | `Position diff > Position limit` **or** `Height diff > Height limit` |
 
-> **Note on CQ:** Leica's proprietary report uses a weighted Coordinate Quality.
+> **Note on CQ:** 's proprietary report uses a weighted Coordinate Quality.
 > This app uses a transparent, recomputable definition (standard error of the
 > mean). The decision-driving values — the position/height spread vs the
 > tolerances — match the cadastral double-polar check exactly.
@@ -133,4 +133,4 @@ scripts/seed.mjs                Sample MATEBELE2022 data
   during calibration; the app does not currently recompute the transformation
   from the WGS-84 ↔ Local Grid identical points (that requires the TM27
   projection chain — easy to add later if needed).
-- Could add: import an existing Leica `.txt` field book, CSV export, map view.
+- Could add: import an existing  `.txt` field book, CSV export, map view.

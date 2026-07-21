@@ -39,7 +39,7 @@ const EMPTY = {
   minTimeDiffMinutes: `<${DEFAULT_MIN_TIME_DIFF_PLOT_MINUTES}mins`,
   coordDecimals: 4,
   timezone: "2h 00'",
-  applicationSoftware: "LEICA Geo Office 7.0",
+  applicationSoftware: " Geo Office 7.0",
   firmwareVersion: "5.60",
   codelistName: "THEBE",
   transformation: { commonPoints: "", rotationOriginX: "", rotationOriginY: "", dE: "", dN: "", rotation: "", scalePpm: "" },

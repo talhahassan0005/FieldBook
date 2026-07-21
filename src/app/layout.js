@@ -7,7 +7,7 @@ import HeaderActions from "@/components/HeaderActions";
 export const metadata = {
   title: "Cadastral Field Book",
   description:
-    "Digital field book for Leica RTK GPS cadastral surveys — calibration & double-polar workflow",
+    "Digital field book for RTK GPS cadastral surveys — calibration & double-polar workflow",
 };
 
 export default function RootLayout({ children }) {

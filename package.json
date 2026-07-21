@@ -2,7 +2,7 @@
   "name": "cadastral-fieldbook",
   "version": "1.0.0",
   "private": true,
-  "description": "Digital cadastral field book for Leica RTK GPS surveys (double-polar workflow)",
+  "description": "Digital cadastral field book for  RTK GPS surveys (double-polar workflow)",
   "scripts": {
     "dev": "next dev",
     "dev:standalone": "node scripts/dev-standalone.mjs",

@@ -286,7 +286,7 @@ export default function ReportPage({ params }) {
   const hasSystemA = identicalRows.some((c) => c.X != null);
 
   // "Mean Coordinates and Differences" lists only the double-polar points
-  // (2+ observations) — exactly as the Leica field book does.
+  // (2+ observations) — exactly as the  field book does.
   const meanPoints = points.filter((p) => (p.computed?.observationCount || 0) >= 2);
 
   // ----- Deterministic report TIME MODEL (client's strict ordering rules) ------
@@ -459,7 +459,7 @@ export default function ReportPage({ params }) {
   );
 
   // GPS Coordinates baselines: the setup measurements (reference marks, then the
-  // working point) first, then the beacons grouped by reference station (as Leica
+  // working point) first, then the beacons grouped by reference station (as 
   // does: all rovers from base 1, then base 2…), rovers by name.
   const baselines = [...refMarkBaselines, ...workingPointBaselines, ...beaconBaselines];
   const refOrder = [];
@@ -502,7 +502,7 @@ export default function ReportPage({ params }) {
     }
   });
 
-  // The date under the title is the report generation time (as in the Leica book).
+  // The date under the title is the report generation time (as in the  book).
   const reportDate = generatedAt;
 
   return (
@@ -951,7 +951,7 @@ export default function ReportPage({ params }) {
   );
 }
 
-/* ---------- presentational helpers (match Leica Geo Office field book) ---------- */
+/* ---------- presentational helpers (match  Geo Office field book) ---------- */
 
 
 function ImageWithFallback({ src }) {
@@ -961,7 +961,7 @@ function ImageWithFallback({ src }) {
     // Faithful replica of the Microsoft Office "The linked image cannot be
     // displayed" placeholder (a thin image frame with the red-X broken-image
     // icon at the top-left and the wrapped grey message beside it) — matches the
-    // original Leica Geo Office field book exactly when no logo is embedded.
+    // original  Geo Office field book exactly when no logo is embedded.
     return (
       <div
   className="absolute right-[-8px] top-[-38px] border-t border-l border-gray-400 border-r border-b border-r-gray-100 border-b-gray-100 bg-white"
@@ -1317,7 +1317,7 @@ function advanceWithinWorkHours(d, minutes) {
   return cur;
 }
 
-// Format a Date as "DD/MM/YYYY HH:MM:SS" (no comma, 24-hour) — the Leica style.
+// Format a Date as "DD/MM/YYYY HH:MM:SS" (no comma, 24-hour) — the  style.
 function fmtDateTime24(d) {
   const p = (x) => String(x).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
