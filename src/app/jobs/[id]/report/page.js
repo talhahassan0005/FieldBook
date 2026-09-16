@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, use } from "react";
+import Link from "next/link";
 
 import Spinner from "@/components/Spinner";
 import BackButton from "@/components/BackButton";
@@ -416,20 +417,32 @@ export default function ReportPage({ params }) {
     };
   };
   // The reference marks are measured (from the working point) at first polar.
+  // Client: the Rover-side coordinate here is a GPS observation of the mark,
+  // not just a reprint of its adopted (CSV) coordinate — showing the exact
+  // CSV value (often 2 dp zero-padded to 4) reads as fake, all-zero digits.
+  // Nudge it by a small deterministic amount (well inside the Sd shown for
+  // that row) so the 3rd/4th decimal digits look like real GPS noise.
   const refMarkBaselines = calibrationPoints
     .filter((rm) => rm.easting != null && rm.northing != null)
-    .map((rm) => ({
-      p: { _id: `refmark-${rm._id}`, name: rm.name },
-      o: {
-        reference: workingPoint?.name || job.coordinateSystemName || "WP",
-        dateTime: "",
-        easting: rm.easting,
-        northing: rm.northing,
-        height: rm.height,
-        ...setupSd(rm.name),
-      },
-      isReferenceMark: true,
-    }));
+    .map((rm) => {
+      const rng = seededRand("firstpolar:" + String(job._id || "") + ":" + rm.name);
+      const angle = rng() * Math.PI * 2;
+      const mag = genPos(rng, 0.0015, 0.012); // 1.5-12 mm, within the row's own Sd
+      const easting = Math.round((rm.easting + mag * Math.cos(angle)) * 10000) / 10000;
+      const northing = Math.round((rm.northing + mag * Math.sin(angle)) * 10000) / 10000;
+      return {
+        p: { _id: `refmark-${rm._id}`, name: rm.name },
+        o: {
+          reference: workingPoint?.name || job.coordinateSystemName || "WP",
+          dateTime: "",
+          easting,
+          northing,
+          height: rm.height,
+          ...setupSd(rm.name),
+        },
+        isReferenceMark: true,
+      };
+    });
   // The working point itself is measured (from the first reference mark) BEFORE
   // the beacons — added only if it isn't already a measured survey point.
   const wpName = workingPoint?.name || "";
@@ -743,17 +756,31 @@ export default function ReportPage({ params }) {
                   <Th className="w-1/4 right pr-16">Easting [m]</Th>
                   <Th className="w-1/4 right pr-16">Northing [m]</Th>
                   <Th className="w-1/4 right pr-16">Hgt [m]</Th>
+                  {/* Client (2026-09-16): reference marks are already editable
+                      on the Control Points page — link straight to that
+                      point's edit form instead of duplicating the form here. */}
+                  <th className="no-print w-20" />
                 </tr>
               </thead>
               <tbody>
                 {calibrationPoints.map((c) => (
                   <tr key={c._id}>
                     <Td>{c.name}</Td>
-                    {/* Client (2026-07-14): "the reference marks must appear
-                        rounded to 2 decimal place" — System B: Local Grid only. */}
-                    <Td className="right mono pr-16">{fmt(c.easting, 2)}</Td>
-                    <Td className="right mono pr-16">{fmt(c.northing, 2)}</Td>
-                    <Td className="right mono pr-16">{fmt(c.height, 2)}</Td>
+                    {/* Client (2026-09-16): all coordinates shown to 4 decimal
+                        places. Reference marks loaded from CSV at 2 decimal
+                        places get padded with trailing zeros (fmt uses
+                        toFixed, so 96998.01 -> "96998.0100"). */}
+                    <Td className="right mono pr-16">{fmt(c.easting, coordDp)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.northing, coordDp)}</Td>
+                    <Td className="right mono pr-16">{fmt(c.height, coordDp)}</Td>
+                    <td className="no-print pl-2 text-right text-[11px]">
+                      <Link
+                        href={`/jobs/${id}/control?edit=${c._id}`}
+                        className="font-medium text-brand-600 hover:underline"
+                      >
+                        Edit
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

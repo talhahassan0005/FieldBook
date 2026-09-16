@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, use, useId, isValidElement, cloneElement } from "react";
+import { Suspense, useEffect, useState, use, useId, isValidElement, cloneElement } from "react";
+import { useSearchParams } from "next/navigation";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import BackButton from "@/components/BackButton";
 import Spinner from "@/components/Spinner";
@@ -26,14 +27,29 @@ const EMPTY = {
 
 export default function ControlPointsPage({ params }) {
   const { id } = use(params);
+  return (
+    <Suspense fallback={<Spinner label="Loading control points…" />}>
+      <ControlPointsInner id={id} />
+    </Suspense>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary in the App Router, so the
+// actual page content lives in this inner component.
+function ControlPointsInner({ id }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const searchParams = useSearchParams();
+  // Deep link from the Field Book Report's "System B: Local Grid" table
+  // (?edit=<pointId>) — opens that point's edit form as soon as it loads.
+  const editParam = searchParams.get("edit");
   const [job, setJob] = useState(null);
   const [points, setPoints] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deepLinkApplied, setDeepLinkApplied] = useState(false);
 
   async function load() {
     try {
@@ -56,6 +72,13 @@ export default function ControlPointsPage({ params }) {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (deepLinkApplied || !editParam || !points) return;
+    const target = points.find((p) => p._id === editParam);
+    if (target) startEdit(target);
+    setDeepLinkApplied(true);
+  }, [deepLinkApplied, editParam, points]);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
