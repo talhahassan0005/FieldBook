@@ -38,6 +38,9 @@ export default function RootLayout({ children }) {
                 <div className="text-[11px] text-slate-500">RTK GPS · Double-Polar Surveys</div>
               </div>
             </Link>
+            <span className="hidden text-center text-xs font-medium text-amber-600 sm:block">
+              This simulator is strictly for training purposes.
+            </span>
             <HeaderActions />
           </div>
             </header>

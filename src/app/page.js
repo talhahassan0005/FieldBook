@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import Spinner from "@/components/Spinner";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmDialog";
+import HowItWorksVideo from "@/components/HowItWorksVideo";
 
 export default function HomePage() {
   const toast = useToast();
@@ -54,6 +55,7 @@ export default function HomePage() {
             Each job holds its calibration control points and double-polar survey points.
           </p>
         </div>
+        <HowItWorksVideo />
       </div>
 
       {error && (

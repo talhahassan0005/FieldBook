@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useRef, useState, use } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -31,6 +31,9 @@ export default function SurveyPointsPage({ params }) {
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const selectAllRef = useRef(null);
 
   async function load() {
     try {
@@ -51,6 +54,12 @@ export default function SurveyPointsPage({ params }) {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    const total = points?.length || 0;
+    selectAllRef.current.indeterminate = selected.size > 0 && selected.size < total;
+  }, [selected, points]);
 
   function openNew() {
     setEditing(null);
@@ -78,9 +87,53 @@ export default function SurveyPointsPage({ params }) {
     try {
       await api.del(`/api/survey/${p._id}`);
       toast.success(`Survey point "${p.name}" deleted.`);
+      setSelected((s) => {
+        if (!s.has(p._id)) return s;
+        const next = new Set(s);
+        next.delete(p._id);
+        return next;
+      });
       await load();
     } catch (err) {
       toast.error(err.message);
+    }
+  }
+
+  function toggleOne(id) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setSelected((s) =>
+      points && s.size === points.length ? new Set() : new Set((points || []).map((p) => p._id))
+    );
+  }
+  async function removeSelected() {
+    const count = selected.size;
+    if (count === 0) return;
+    const okToDelete = await confirm({
+      title: `Delete ${count} survey point${count === 1 ? "" : "s"}?`,
+      message: "These points and their observations will be removed.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!okToDelete) return;
+    setDeleting(true);
+    try {
+      const ids = [...selected];
+      const results = await Promise.allSettled(ids.map((pid) => api.del(`/api/survey/${pid}`)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const succeeded = ids.length - failed;
+      if (succeeded > 0) toast.success(`Deleted ${succeeded} survey point${succeeded === 1 ? "" : "s"}.`);
+      if (failed > 0) toast.error(`Failed to delete ${failed} survey point${failed === 1 ? "" : "s"}.`);
+      setSelected(new Set());
+      await load();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -110,6 +163,15 @@ export default function SurveyPointsPage({ params }) {
           <Link href={`/jobs/${id}/report`} className="btn-secondary">
             📄 Report
           </Link>
+          {selected.size > 0 && (
+            <button
+              className="btn-secondary text-red-600 disabled:opacity-50"
+              onClick={removeSelected}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : `🗑 Delete selected (${selected.size})`}
+            </button>
+          )}
           {!showImport && (
             <button
               className="btn-secondary"
@@ -186,6 +248,16 @@ export default function SurveyPointsPage({ params }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs uppercase text-slate-400">
+                <th className="px-5 py-2 font-semibold">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer rounded border-slate-300"
+                    checked={points.length > 0 && selected.size === points.length}
+                    onChange={toggleAll}
+                    aria-label="Select all survey points"
+                  />
+                </th>
                 <th className="px-5 py-2 font-semibold">Point</th>
                 <th className="px-3 py-2 text-center font-semibold">Obs</th>
                 <th className="px-3 py-2 text-right font-semibold">Mean E</th>
@@ -200,6 +272,15 @@ export default function SurveyPointsPage({ params }) {
             <tbody>
               {points.map((p) => (
                 <tr key={p._id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <td className="px-5 py-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer rounded border-slate-300"
+                      checked={selected.has(p._id)}
+                      onChange={() => toggleOne(p._id)}
+                      aria-label={`Select ${p.name}`}
+                    />
+                  </td>
                   <td className="px-5 py-2 font-medium text-slate-800">
                     {p.name}
                     {p.code && <span className="ml-2 text-xs text-slate-400">{p.code}</span>}
