@@ -718,8 +718,8 @@ export default function ReportPage({ params }) {
                         places. Reference marks loaded from CSV at 2 decimal
                         places get padded with trailing zeros (fmt uses
                         toFixed, so 96998.01 -> "96998.0100"). */}
-                    <Td className="right mono pr-16">{fmt(c.easting, coordDp)}</Td>
-                    <Td className="right mono pr-16">{fmt(c.northing, coordDp)}</Td>
+                    <Td className="right mono pr-16">{fmt2z(c.easting)}</Td>
+                    <Td className="right mono pr-16">{fmt2z(c.northing)}</Td>
                     <Td className="right mono pr-16">{fmt(c.height, coordDp)}</Td>
                     <td className="no-print pl-2 text-right text-[11px]">
                       <Link
