@@ -80,20 +80,18 @@ export default function CoordinateListPage({ params }) {
     .sort(byName);
   const beacons = [...points].sort(byName);
 
-  // Match the client's sample sequence exactly: only TWO headers —
-  // "REFERENCE MARKS" (reference marks, then a blank line, then the working
-  // points, then any other control) and "BEACONS". A `SPACER` marks the blank
-  // separator row the sample shows between the reference marks and the WPs.
+  // Section sequence: "REFERENCE MARKS" (reference marks, then a blank line,
+  // then any other control), its own "WORKING POINT" header for the working
+  // points, and "BEACONS". A `SPACER` marks a blank separator row.
   const SPACER = { spacer: true };
   const refSection = [];
   for (const c of refMarks) refSection.push(toRow(c, PEG_CONCRETE));
-  if (refSection.length && workingPts.length) refSection.push(SPACER);
-  for (const c of workingPts) refSection.push(toRow(c, PEG));
   if (refSection.length && otherCtrl.length) refSection.push(SPACER);
   for (const c of otherCtrl) refSection.push(toRow(c, PEG));
 
   const groups = [
     ["REFERENCE MARKS", refSection],
+    ["WORKING POINT", workingPts.map((c) => toRow(c, PEG))],
     ["BEACONS", beacons.map((c) => toRow(c, PEG))],
   ].filter(([, rows]) => rows.length > 0);
 
@@ -101,8 +99,8 @@ export default function CoordinateListPage({ params }) {
   const title = "COORDINATE LIST";
 
   // Build & download a real Excel (.xlsx) file matching the client's sample:
-  // a title row, then each section (REFERENCE MARKS — incl. working points — then
-  // BEACONS) with a "Description" header, the data rows, and blank spacer rows.
+  // a title row, then each section (REFERENCE MARKS, WORKING POINT, BEACONS)
+  // with a "Description" header, the data rows, and blank spacer rows.
   async function downloadExcel() {
     const XLSX = await import("xlsx");
     const round2 = (v) => (v == null || !Number.isFinite(Number(v)) ? "" : Math.round(Number(v) * 100) / 100);
